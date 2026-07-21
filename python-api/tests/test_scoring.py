@@ -1,6 +1,8 @@
 from types import SimpleNamespace
 
-from app.services import _public_emails, calculate_lead_score, is_business_email
+from bs4 import BeautifulSoup
+
+from app.services import _public_emails, _public_phones, calculate_lead_score, is_business_email
 
 
 def test_score_is_transparent_and_capped():
@@ -15,7 +17,7 @@ def test_score_is_transparent_and_capped():
     score, temperature, reasons = calculate_lead_score(lead)
     assert score == 90
     assert temperature == "hot"
-    assert any("e-mail" in reason for reason in reasons)
+    assert any("canal de contato" in reason for reason in reasons)
 
 
 def test_no_crm_is_cold_even_with_contact():
@@ -33,7 +35,7 @@ def test_no_crm_is_cold_even_with_contact():
 
 
 def test_public_email_prefers_business_domain_and_ignores_free_mail():
-    content = "marcio.fotog@gmail.com contato@empresa.com.br b2b@empresa.com.br"
+    content = "marcio.fotog@gmail.com email@email.com contato@empresa.com.br b2b@empresa.com.br"
 
     assert _public_emails(content, "empresa.com.br") == [
         "b2b@empresa.com.br",
@@ -41,3 +43,14 @@ def test_public_email_prefers_business_domain_and_ignores_free_mail():
     ]
     assert not is_business_email("pessoa@gmail.com")
     assert is_business_email("vendas@empresa.com.br")
+
+
+def test_public_phones_extracts_tel_and_whatsapp_links():
+    soup = BeautifulSoup(
+        '<a href="tel:+55 48 3333-4444">Telefone</a><a href="https://wa.me/5548999998888">WhatsApp</a>',
+        "html.parser",
+    )
+
+    phones, whatsapps = _public_phones(soup)
+    assert phones == ["+554833334444"]
+    assert whatsapps == ["+5548999998888"]

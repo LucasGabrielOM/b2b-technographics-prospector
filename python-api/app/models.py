@@ -37,6 +37,8 @@ class Lead(Base):
     contact_name: Mapped[str | None] = mapped_column(String(160))
     contact_role: Mapped[str | None] = mapped_column(String(160))
     contact_email: Mapped[str | None] = mapped_column(String(320))
+    contact_phone: Mapped[str | None] = mapped_column(String(40))
+    contact_whatsapp: Mapped[str | None] = mapped_column(String(40))
     email_subject: Mapped[str | None] = mapped_column(String(240))
     email_body: Mapped[str | None] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(30), default=LeadStatus.DISCOVERED.value, index=True)

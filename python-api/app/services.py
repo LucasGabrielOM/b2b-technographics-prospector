@@ -1,6 +1,6 @@
 import json
 import re
-from urllib.parse import urljoin, urlparse
+from urllib.parse import parse_qs, urljoin, urlparse
 
 import httpx
 from bs4 import BeautifulSoup
@@ -21,7 +21,8 @@ TECH_SIGNATURES = {
 
 CONTACT_TERMS = ("contato", "contact", "orcamento", "orçamento", "fale", "sobre", "about", "atendimento")
 EMAIL_RE = re.compile(r"[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}", re.I)
-IGNORED_EMAIL_PARTS = ("example.", "sentry", "wixpress", "cloudflare", "noreply", "no-reply")
+PHONE_RE = re.compile(r"(?:\+?55\s*)?(?:\(?\d{2}\)?[\s.-]*)?(?:9\s*)?\d{4}[\s.-]*\d{4}")
+IGNORED_EMAIL_PARTS = ("example.", "email@email", "teste@teste", "sentry", "wixpress", "cloudflare", "noreply", "no-reply")
 FREE_EMAIL_DOMAINS = {
     "gmail.com", "hotmail.com", "hotmail.com.br", "outlook.com", "live.com",
     "yahoo.com", "yahoo.com.br", "icloud.com", "bol.com.br", "uol.com.br",
@@ -61,6 +62,39 @@ def _email_priority(email: str, domain: str) -> tuple[int, int, str]:
     return (0 if same_domain else 1, 0 if role_account else 1, email)
 
 
+def _normalize_br_phone(value: str) -> str | None:
+    digits = re.sub(r"\D", "", value)
+    if len(digits) in {10, 11}:
+        digits = "55" + digits
+    if len(digits) not in {12, 13} or not digits.startswith("55"):
+        return None
+    return "+" + digits
+
+
+def _public_phones(soup: BeautifulSoup) -> tuple[list[str], list[str]]:
+    phones: set[str] = set()
+    whatsapps: set[str] = set()
+    for tag in soup.find_all("a", href=True):
+        href = tag.get("href", "").strip()
+        if href.lower().startswith("tel:"):
+            phone = _normalize_br_phone(href[4:])
+            if phone:
+                phones.add(phone)
+        parsed = urlparse(href)
+        hostname = (parsed.hostname or "").lower()
+        if hostname == "wa.me" or hostname.endswith("whatsapp.com"):
+            raw_phone = parsed.path.strip("/") if hostname == "wa.me" else parse_qs(parsed.query).get("phone", [""])[0]
+            phone = _normalize_br_phone(raw_phone)
+            if phone:
+                whatsapps.add(phone)
+    if not phones:
+        for match in PHONE_RE.findall(soup.get_text(" ", strip=True)):
+            phone = _normalize_br_phone(match)
+            if phone:
+                phones.add(phone)
+    return sorted(phones), sorted(whatsapps)
+
+
 def _contact_links(soup: BeautifulSoup, base_url: str, domain: str) -> list[str]:
     links: list[str] = []
     for tag in soup.find_all("a", href=True):
@@ -79,6 +113,8 @@ async def scan_domain(domain: str, settings: Settings) -> dict:
     headers = {"User-Agent": settings.crawler_user_agent}
     evidence: list[dict] = []
     found_emails: set[str] = set()
+    found_phones: set[str] = set()
+    found_whatsapps: set[str] = set()
     try:
         async with httpx.AsyncClient(timeout=settings.request_timeout_seconds, follow_redirects=True, headers=headers) as client:
             homepage = await client.get(f"https://{domain}")
@@ -96,15 +132,18 @@ async def scan_domain(domain: str, settings: Settings) -> dict:
                     continue
         scores: dict[str, int] = {}
         for response in responses:
-            _, searchable = _page_content(response)
+            soup, searchable = _page_content(response)
             found_emails.update(_public_emails(searchable, domain))
+            phones, whatsapps = _public_phones(soup)
+            found_phones.update(phones)
+            found_whatsapps.update(whatsapps)
             for technology, patterns in TECH_SIGNATURES.items():
                 matches = sorted({pattern for pattern in patterns if re.search(pattern, searchable, re.I)})
                 if matches:
                     scores[technology] = scores.get(technology, 0) + len(matches)
                     evidence.append({"source": str(response.url), "technology": technology, "signatures": matches})
         if not scores:
-            return {"crm": None, "confidence": 0.0, "evidence": [], "public_emails": sorted(found_emails), "pages_scanned": len(responses)}
+            return {"crm": None, "confidence": 0.0, "evidence": [], "public_emails": sorted(found_emails), "public_phones": sorted(found_phones), "public_whatsapps": sorted(found_whatsapps), "pages_scanned": len(responses)}
         crm = max(scores, key=scores.get)
         confidence = min(0.95, 0.55 + 0.15 * (scores[crm] - 1))
         return {
@@ -112,10 +151,12 @@ async def scan_domain(domain: str, settings: Settings) -> dict:
             "confidence": confidence,
             "evidence": [item for item in evidence if item["technology"] == crm],
             "public_emails": sorted(found_emails),
+            "public_phones": sorted(found_phones),
+            "public_whatsapps": sorted(found_whatsapps),
             "pages_scanned": len(responses),
         }
     except (httpx.HTTPError, ValueError):
-        return {"crm": None, "confidence": 0.0, "evidence": [], "public_emails": [], "pages_scanned": 0}
+        return {"crm": None, "confidence": 0.0, "evidence": [], "public_emails": [], "public_phones": [], "public_whatsapps": [], "pages_scanned": 0}
 
 
 def calculate_lead_score(lead: Lead) -> tuple[int, str, list[str]]:
@@ -132,9 +173,9 @@ def calculate_lead_score(lead: Lead) -> tuple[int, str, list[str]]:
         points = min(20, (evidence_pages - 1) * 10)
         score += points
         reasons.append(f"+{points}: evidência encontrada em {evidence_pages} páginas")
-    if lead.contact_email:
+    if getattr(lead, "contact_email", None) or getattr(lead, "contact_whatsapp", None) or getattr(lead, "contact_phone", None):
         score += 20
-        reasons.append("+20: e-mail profissional público disponível")
+        reasons.append("+20: canal de contato público disponível")
     if lead.company_name:
         score += 5
         reasons.append("+5: empresa identificada")

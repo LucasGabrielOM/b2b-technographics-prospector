@@ -3,12 +3,13 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .config import Settings, get_settings
-from .database import Base, engine, get_db
+from .database import Base, engine, ensure_lead_contact_columns, get_db
 from .models import Lead, LeadStatus
 from .schemas import DiscoveryRequest, GenerateRequest, LeadOut, LeadPatch, SuppressRequest
 from .services import dispatch, enrich_with_hunter, generate_draft, is_business_email, refresh_lead_score, scan_domain
 
 Base.metadata.create_all(bind=engine)
+ensure_lead_contact_columns()
 app = FastAPI(title="B2B Technographics Prospector", version="0.1.0")
 
 
@@ -36,6 +37,8 @@ async def discover(payload: DiscoveryRequest, db: Session = Depends(get_db), set
         lead.crm, lead.confidence, lead.evidence = scan["crm"], scan["confidence"], scan["evidence"]
         if not is_business_email(lead.contact_email):
             lead.contact_email = scan["public_emails"][0] if scan["public_emails"] else None
+        lead.contact_phone = scan["public_phones"][0] if scan["public_phones"] else None
+        lead.contact_whatsapp = scan["public_whatsapps"][0] if scan["public_whatsapps"] else None
         refresh_lead_score(lead)
         result.append(lead)
     db.commit()
