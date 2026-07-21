@@ -27,6 +27,16 @@ def ensure_lead_contact_columns() -> None:
         for name in ("contact_phone", "contact_whatsapp"):
             if name not in existing:
                 connection.execute(text(f"ALTER TABLE leads ADD COLUMN {name} VARCHAR(40)"))
+        additions = {
+            "location": "VARCHAR(160)",
+            "discovery_source": "VARCHAR(500)",
+            "pain_score": "INTEGER DEFAULT 0",
+            "pain_summary": "TEXT",
+            "pain_source": "VARCHAR(1000)",
+        }
+        for name, sql_type in additions.items():
+            if name not in existing:
+                connection.execute(text(f"ALTER TABLE leads ADD COLUMN {name} {sql_type}"))
 
 
 def get_db():

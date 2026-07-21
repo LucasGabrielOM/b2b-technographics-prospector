@@ -1,5 +1,18 @@
 # B2B Technographics Prospector
 
+## Prospecção automática completa
+
+O workflow **B2B 03 - Prospecção automática completa** não recebe uma lista de domínios. Ele recebe apenas cidade, estado, segmentos e limite, descobre empresas com site na região, visita os sites, encontra CRM e canais de contato, pesquisa sinais públicos de reclamações, pontua os leads e prepara mensagens de WhatsApp ou e-mail.
+
+```text
+Agenda diária -> região/segmentos -> descobrir empresas e sites -> analisar CRM e contato
+              -> pesquisar reclamações -> pontuar -> preparar mensagem
+```
+
+Para testar gratuitamente, importe `n8n/workflows/03_hot_leads.json` e execute **Testar agora**. O padrão pesquisa Florianópolis. A descoberta gratuita usa websites empresariais cadastrados no OpenStreetMap; a busca pública de reclamações usa um mecanismo gratuito como fallback. Para uso comercial estável, configure `SERPER_API_KEY` no Render, pois páginas de busca gratuitas podem bloquear automações.
+
+O sistema não precisa de OpenAI para descobrir leads. O disparo automático, porém, exige uma conta real de WhatsApp Business Cloud API/provedor ou SMTP. Sem essa credencial, o último nó deixa a mensagem e o link prontos, mas não finge que enviou.
+
 MVP de prospecção B2B com **n8n + Python**, detecção multipágina de CRM por sinais públicos, enriquecimento opcional, score transparente de oportunidade, geração de abordagem e aprovação humana obrigatória antes do envio.
 
 ## Arquitetura

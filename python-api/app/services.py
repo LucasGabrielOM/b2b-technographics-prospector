@@ -192,7 +192,13 @@ def calculate_lead_score(lead: Lead) -> tuple[int, str, list[str]]:
 
 
 def refresh_lead_score(lead: Lead) -> None:
-    lead.lead_score, lead.temperature, lead.score_reasons = calculate_lead_score(lead)
+    technology_score, _, reasons = calculate_lead_score(lead)
+    pain_score = int(getattr(lead, "pain_score", 0) or 0)
+    lead.lead_score = max(technology_score, pain_score)
+    if pain_score:
+        reasons.append(f"+sinal: reclamações públicas geraram score de dor {pain_score}")
+    lead.temperature = "hot" if lead.lead_score >= 70 else "warm" if lead.lead_score >= 45 else "cold"
+    lead.score_reasons = reasons
 
 
 async def enrich_with_hunter(lead: Lead, settings: Settings) -> dict:

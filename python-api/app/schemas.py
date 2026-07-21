@@ -15,6 +15,19 @@ class DiscoveryRequest(BaseModel):
         return cleaned
 
 
+class ProspectRequest(BaseModel):
+    city: str = Field(default="Florianópolis", min_length=2, max_length=100)
+    state: str = Field(default="Santa Catarina", min_length=2, max_length=100)
+    segments: list[str] = Field(
+        default_factory=lambda: ["imobiliária", "concessionária", "loja", "clínica"],
+        min_length=1,
+        max_length=12,
+    )
+    limit: int = Field(default=20, ge=1, le=60)
+    min_score: int = Field(default=45, ge=0, le=100)
+    include_complaints: bool = True
+
+
 class LeadPatch(BaseModel):
     company_name: str | None = None
     sector: str | None = None
@@ -58,3 +71,8 @@ class LeadOut(BaseModel):
     email_body: str | None
     status: str
     suppression_reason: str | None
+    location: str | None
+    discovery_source: str | None
+    pain_score: int
+    pain_summary: str | None
+    pain_source: str | None
