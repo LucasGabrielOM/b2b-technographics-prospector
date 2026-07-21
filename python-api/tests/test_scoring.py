@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 
-from app.services import calculate_lead_score
+from app.services import _public_emails, calculate_lead_score
 
 
 def test_score_is_transparent_and_capped():
@@ -30,3 +30,12 @@ def test_no_crm_is_cold_even_with_contact():
     score, temperature, _ = calculate_lead_score(lead)
     assert score == 20
     assert temperature == "cold"
+
+
+def test_public_email_prefers_business_domain_and_ignores_free_mail():
+    content = "marcio.fotog@gmail.com contato@empresa.com.br b2b@empresa.com.br"
+
+    assert _public_emails(content, "empresa.com.br") == [
+        "b2b@empresa.com.br",
+        "contato@empresa.com.br",
+    ]

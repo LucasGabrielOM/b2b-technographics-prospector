@@ -22,6 +22,11 @@ TECH_SIGNATURES = {
 CONTACT_TERMS = ("contato", "contact", "orcamento", "orçamento", "fale", "sobre", "about", "atendimento")
 EMAIL_RE = re.compile(r"[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}", re.I)
 IGNORED_EMAIL_PARTS = ("example.", "sentry", "wixpress", "cloudflare", "noreply", "no-reply")
+FREE_EMAIL_DOMAINS = {
+    "gmail.com", "hotmail.com", "hotmail.com.br", "outlook.com", "live.com",
+    "yahoo.com", "yahoo.com.br", "icloud.com", "bol.com.br", "uol.com.br",
+}
+BUSINESS_EMAIL_PREFIXES = ("b2b", "comercial", "vendas", "contato", "atendimento", "marketing", "negocios")
 
 
 def _page_content(response: httpx.Response) -> tuple[BeautifulSoup, str]:
@@ -41,7 +46,15 @@ def _public_emails(searchable: str, domain: str) -> list[str]:
         for email in EMAIL_RE.findall(searchable)
         if not any(part in email.lower() for part in IGNORED_EMAIL_PARTS)
     }
-    return sorted(emails, key=lambda email: (not email.endswith("@" + domain), email))
+    business_emails = [email for email in emails if email.rsplit("@", 1)[-1] not in FREE_EMAIL_DOMAINS]
+    return sorted(business_emails, key=lambda email: _email_priority(email, domain))
+
+
+def _email_priority(email: str, domain: str) -> tuple[int, int, str]:
+    local_part, email_domain = email.rsplit("@", 1)
+    same_domain = email_domain == domain or domain.endswith("." + email_domain) or email_domain.endswith("." + domain)
+    role_account = any(local_part == prefix or local_part.startswith(prefix + ".") for prefix in BUSINESS_EMAIL_PREFIXES)
+    return (0 if same_domain else 1, 0 if role_account else 1, email)
 
 
 def _contact_links(soup: BeautifulSoup, base_url: str, domain: str) -> list[str]:
