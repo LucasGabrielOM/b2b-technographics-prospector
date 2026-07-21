@@ -1,0 +1,44 @@
+{
+  "name": "B2B 03 - Leads quentes priorizados",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "manual-hot",
+      "name": "Executar manualmente",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [260, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://b2b-technographics-prospector.onrender.com/api/v1/leads/hot",
+        "sendQuery": true,
+        "queryParameters": {"parameters": [{"name": "min_score", "value": "70"}, {"name": "limit", "value": "50"}]},
+        "options": {}
+      },
+      "id": "hot-api",
+      "name": "Buscar leads quentes",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [500, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const leads = $input.all().flatMap(item => Array.isArray(item.json) ? item.json : [item.json]).filter(lead => lead && lead.id).sort((a, b) => b.lead_score - a.lead_score); return leads.map((lead, index) => ({json: {priority: index + 1, id: lead.id, domain: lead.domain, company: lead.company_name || lead.domain, crm: lead.crm, score: lead.lead_score, temperature: lead.temperature, contact_email: lead.contact_email, reasons: lead.score_reasons, evidence: lead.evidence}}));"
+      },
+      "id": "rank-hot",
+      "name": "Ordenar oportunidades",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [740, 300]
+    }
+  ],
+  "connections": {
+    "Executar manualmente": {"main": [[{"node": "Buscar leads quentes", "type": "main", "index": 0}]]},
+    "Buscar leads quentes": {"main": [[{"node": "Ordenar oportunidades", "type": "main", "index": 0}]]}
+  },
+  "pinData": {},
+  "settings": {"executionOrder": "v1"},
+  "active": false,
+  "versionId": "fe901989-9971-4b04-b63c-2d8da94d96f4"
+}

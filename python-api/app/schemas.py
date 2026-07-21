@@ -44,6 +44,9 @@ class LeadOut(BaseModel):
     crm: str | None
     confidence: float
     evidence: list
+    lead_score: int
+    temperature: str
+    score_reasons: list
     contact_name: str | None
     contact_role: str | None
     contact_email: str | None
@@ -51,4 +54,3 @@ class LeadOut(BaseModel):
     email_body: str | None
     status: str
     suppression_reason: str | None
-

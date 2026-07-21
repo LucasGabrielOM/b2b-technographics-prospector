@@ -1,6 +1,6 @@
 # B2B Technographics Prospector
 
-MVP de prospecção B2B com **n8n + Python**, detecção de CRM por sinais públicos, enriquecimento opcional, geração de abordagem com IA e aprovação humana obrigatória antes do envio.
+MVP de prospecção B2B com **n8n + Python**, detecção multipágina de CRM por sinais públicos, enriquecimento opcional, score transparente de oportunidade, geração de abordagem e aprovação humana obrigatória antes do envio.
 
 ## Arquitetura
 
@@ -48,6 +48,17 @@ O runtime Python está fixado na série 3.12 por `python-api/.python-version`, i
 `discovered -> enriched -> drafted -> approved -> sent`
 
 Qualquer lead pode ir para `suppressed`; nesse estado a geração e o envio ficam impedidos. Aprovação exige rascunho e e-mail. Envio exige aprovação e duas configurações explícitas.
+
+## Priorização de leads
+
+O detector visita a página inicial e até quatro páginas públicas relacionadas a contato, orçamento, atendimento ou sobre. Ele procura assinaturas de CRM e e-mails publicados pela própria empresa. O score é explicável e vai de 0 a 100:
+
+- CRM detectado: 35 ou 50 pontos, conforme a confiança;
+- evidência em páginas adicionais: até 20 pontos;
+- e-mail profissional público: 20 pontos;
+- empresa e setor identificados: 5 pontos cada.
+
+Temperaturas: `hot` a partir de 70, `warm` a partir de 45 e `cold` abaixo disso. Consulte `GET /api/v1/leads/hot` ou importe o workflow **B2B 03 - Leads quentes priorizados**. O score prioriza revisão; ele não autoriza envio automático.
 
 ## Integrações e extensões
 

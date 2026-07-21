@@ -1,6 +1,6 @@
 import json
 import re
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse
 
 import httpx
 from bs4 import BeautifulSoup
@@ -15,43 +15,132 @@ TECH_SIGNATURES = {
     "Bitrix24": [r"bitrix24", r"bx24", r"bitrix\.info"],
     "HubSpot": [r"js\.hs-scripts\.com", r"hubspot", r"hsforms\.net"],
     "Salesforce": [r"salesforce", r"force\.com", r"pardot", r"salesforceliveagent"],
-    "RD Station": [r"rdstation", r"rd\.services", r"resultadosdigitais"],
+    "RD Station": [r"rdstation", r"rd\.services", r"resultadosdigitais", r"d335luupugsy2\.cloudfront\.net"],
     "Pipedrive": [r"pipedrive", r"leadbooster-chat"],
 }
 
+CONTACT_TERMS = ("contato", "contact", "orcamento", "orçamento", "fale", "sobre", "about", "atendimento")
+EMAIL_RE = re.compile(r"[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}", re.I)
+IGNORED_EMAIL_PARTS = ("example.", "sentry", "wixpress", "cloudflare", "noreply", "no-reply")
 
-async def scan_domain(domain: str, settings: Settings) -> tuple[str | None, float, list[dict]]:
+
+def _page_content(response: httpx.Response) -> tuple[BeautifulSoup, str]:
+    html = response.text[:2_000_000]
+    soup = BeautifulSoup(html, "html.parser")
+    searchable = " ".join(
+        [html, soup.get_text(" ", strip=True)]
+        + [tag.get("src", "") for tag in soup.find_all(src=True)]
+        + [tag.get("href", "") for tag in soup.find_all(href=True)]
+    ).lower()
+    return soup, searchable
+
+
+def _public_emails(searchable: str, domain: str) -> list[str]:
+    emails = {
+        email.lower().strip(".,;:()[]<>")
+        for email in EMAIL_RE.findall(searchable)
+        if not any(part in email.lower() for part in IGNORED_EMAIL_PARTS)
+    }
+    return sorted(emails, key=lambda email: (not email.endswith("@" + domain), email))
+
+
+def _contact_links(soup: BeautifulSoup, base_url: str, domain: str) -> list[str]:
+    links: list[str] = []
+    for tag in soup.find_all("a", href=True):
+        href = tag.get("href", "")
+        label = f"{tag.get_text(' ', strip=True)} {href}".lower()
+        url = urljoin(base_url, href).split("#", 1)[0]
+        parsed = urlparse(url)
+        if parsed.scheme not in {"http", "https"} or parsed.hostname not in {domain, f"www.{domain}"}:
+            continue
+        if any(term in label for term in CONTACT_TERMS) and url not in links:
+            links.append(url)
+    return links[:4]
+
+
+async def scan_domain(domain: str, settings: Settings) -> dict:
     headers = {"User-Agent": settings.crawler_user_agent}
     evidence: list[dict] = []
+    found_emails: set[str] = set()
     try:
         async with httpx.AsyncClient(timeout=settings.request_timeout_seconds, follow_redirects=True, headers=headers) as client:
-            response = await client.get(f"https://{domain}")
-            response.raise_for_status()
-        html = response.text[:2_000_000]
-        soup = BeautifulSoup(html, "html.parser")
-        searchable = " ".join(
-            [html, soup.get_text(" ", strip=True)]
-            + [tag.get("src", "") for tag in soup.find_all(src=True)]
-            + [tag.get("href", "") for tag in soup.find_all(href=True)]
-        ).lower()
+            homepage = await client.get(f"https://{domain}")
+            homepage.raise_for_status()
+            home_soup, _ = _page_content(homepage)
+            urls = [str(homepage.url), *_contact_links(home_soup, str(homepage.url), domain)]
+            responses = [homepage]
+            for url in urls[1:]:
+                try:
+                    page = await client.get(url)
+                    page.raise_for_status()
+                    if "text/html" in page.headers.get("content-type", "text/html"):
+                        responses.append(page)
+                except httpx.HTTPError:
+                    continue
         scores: dict[str, int] = {}
-        for technology, patterns in TECH_SIGNATURES.items():
-            matches = sorted({pattern for pattern in patterns if re.search(pattern, searchable, re.I)})
-            if matches:
-                scores[technology] = len(matches)
-                evidence.append({"source": str(response.url), "technology": technology, "signatures": matches})
+        for response in responses:
+            _, searchable = _page_content(response)
+            found_emails.update(_public_emails(searchable, domain))
+            for technology, patterns in TECH_SIGNATURES.items():
+                matches = sorted({pattern for pattern in patterns if re.search(pattern, searchable, re.I)})
+                if matches:
+                    scores[technology] = scores.get(technology, 0) + len(matches)
+                    evidence.append({"source": str(response.url), "technology": technology, "signatures": matches})
         if not scores:
-            return None, 0.0, []
+            return {"crm": None, "confidence": 0.0, "evidence": [], "public_emails": sorted(found_emails), "pages_scanned": len(responses)}
         crm = max(scores, key=scores.get)
         confidence = min(0.95, 0.55 + 0.15 * (scores[crm] - 1))
-        return crm, confidence, [item for item in evidence if item["technology"] == crm]
+        return {
+            "crm": crm,
+            "confidence": confidence,
+            "evidence": [item for item in evidence if item["technology"] == crm],
+            "public_emails": sorted(found_emails),
+            "pages_scanned": len(responses),
+        }
     except (httpx.HTTPError, ValueError):
-        return None, 0.0, []
+        return {"crm": None, "confidence": 0.0, "evidence": [], "public_emails": [], "pages_scanned": 0}
+
+
+def calculate_lead_score(lead: Lead) -> tuple[int, str, list[str]]:
+    score = 0
+    reasons: list[str] = []
+    if lead.crm:
+        points = 50 if lead.confidence >= 0.7 else 35
+        score += points
+        reasons.append(f"+{points}: CRM {lead.crm} detectado com confiança {lead.confidence:.0%}")
+    else:
+        reasons.append("+0: nenhum CRM confirmado")
+    evidence_pages = len({item.get("source") for item in (lead.evidence or []) if item.get("source")})
+    if evidence_pages > 1:
+        points = min(20, (evidence_pages - 1) * 10)
+        score += points
+        reasons.append(f"+{points}: evidência encontrada em {evidence_pages} páginas")
+    if lead.contact_email:
+        score += 20
+        reasons.append("+20: e-mail profissional público disponível")
+    if lead.company_name:
+        score += 5
+        reasons.append("+5: empresa identificada")
+    if lead.sector:
+        score += 5
+        reasons.append("+5: setor identificado")
+    score = min(100, score)
+    temperature = "hot" if score >= 70 else "warm" if score >= 45 else "cold"
+    return score, temperature, reasons
+
+
+def refresh_lead_score(lead: Lead) -> None:
+    lead.lead_score, lead.temperature, lead.score_reasons = calculate_lead_score(lead)
 
 
 async def enrich_with_hunter(lead: Lead, settings: Settings) -> dict:
     if not settings.hunter_api_key:
-        return {"provider": "hunter", "status": "skipped", "reason": "missing_api_key"}
+        scan = await scan_domain(lead.domain, settings)
+        emails = scan["public_emails"]
+        if emails and not lead.contact_email:
+            lead.contact_email = emails[0]
+            return {"provider": "public_site", "status": "found", "email": emails[0]}
+        return {"provider": "public_site", "status": "not_found"}
     params = {"domain": lead.domain, "api_key": settings.hunter_api_key, "limit": 10}
     async with httpx.AsyncClient(timeout=settings.request_timeout_seconds) as client:
         response = await client.get("https://api.hunter.io/v2/domain-search", params=params)
@@ -136,4 +225,3 @@ async def dispatch(lead: Lead, settings: Settings) -> dict:
         response = await client.post(settings.outreach_webhook_url, json=payload)
         response.raise_for_status()
     return {"status": "sent", "provider_status": response.status_code}
-

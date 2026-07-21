@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from enum import Enum
 
-from sqlalchemy import JSON, DateTime, Float, String, Text
+from sqlalchemy import JSON, DateTime, Float, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from .database import Base
@@ -31,6 +31,9 @@ class Lead(Base):
     crm: Mapped[str | None] = mapped_column(String(80), index=True)
     confidence: Mapped[float] = mapped_column(Float, default=0)
     evidence: Mapped[list] = mapped_column(JSON, default=list)
+    lead_score: Mapped[int] = mapped_column(Integer, default=0, index=True)
+    temperature: Mapped[str] = mapped_column(String(20), default="cold", index=True)
+    score_reasons: Mapped[list] = mapped_column(JSON, default=list)
     contact_name: Mapped[str | None] = mapped_column(String(160))
     contact_role: Mapped[str | None] = mapped_column(String(160))
     contact_email: Mapped[str | None] = mapped_column(String(320))
@@ -40,4 +43,3 @@ class Lead(Base):
     suppression_reason: Mapped[str | None] = mapped_column(String(240))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
-

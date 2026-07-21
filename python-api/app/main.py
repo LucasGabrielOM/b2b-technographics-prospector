@@ -6,7 +6,7 @@ from .config import Settings, get_settings
 from .database import Base, engine, get_db
 from .models import Lead, LeadStatus
 from .schemas import DiscoveryRequest, GenerateRequest, LeadOut, LeadPatch, SuppressRequest
-from .services import dispatch, enrich_with_hunter, generate_draft, scan_domain
+from .services import dispatch, enrich_with_hunter, generate_draft, refresh_lead_score, scan_domain
 
 Base.metadata.create_all(bind=engine)
 app = FastAPI(title="B2B Technographics Prospector", version="0.1.0")
@@ -29,11 +29,14 @@ async def discover(payload: DiscoveryRequest, db: Session = Depends(get_db), set
     result = []
     for domain in payload.domains:
         lead = db.scalar(select(Lead).where(Lead.domain == domain))
-        crm, confidence, evidence = await scan_domain(domain, settings)
+        scan = await scan_domain(domain, settings)
         if lead is None:
             lead = Lead(domain=domain)
             db.add(lead)
-        lead.crm, lead.confidence, lead.evidence = crm, confidence, evidence
+        lead.crm, lead.confidence, lead.evidence = scan["crm"], scan["confidence"], scan["evidence"]
+        if not lead.contact_email and scan["public_emails"]:
+            lead.contact_email = scan["public_emails"][0]
+        refresh_lead_score(lead)
         result.append(lead)
     db.commit()
     return result
@@ -47,6 +50,21 @@ def list_leads(status: str | None = Query(default=None), db: Session = Depends(g
     return list(db.scalars(query))
 
 
+@app.get("/api/v1/leads/hot", response_model=list[LeadOut])
+def hot_leads(
+    min_score: int = Query(default=70, ge=0, le=100),
+    limit: int = Query(default=50, ge=1, le=200),
+    db: Session = Depends(get_db),
+):
+    query = (
+        select(Lead)
+        .where(Lead.lead_score >= min_score, Lead.status != LeadStatus.SUPPRESSED.value)
+        .order_by(Lead.lead_score.desc(), Lead.confidence.desc())
+        .limit(limit)
+    )
+    return list(db.scalars(query))
+
+
 @app.get("/api/v1/leads/{lead_id}", response_model=LeadOut)
 def get_lead(lead_id: int, db: Session = Depends(get_db)):
     return find_lead(lead_id, db)
@@ -57,6 +75,7 @@ def patch_lead(lead_id: int, payload: LeadPatch, db: Session = Depends(get_db)):
     lead = find_lead(lead_id, db)
     for key, value in payload.model_dump(exclude_unset=True).items():
         setattr(lead, key, str(value) if value is not None else None)
+    refresh_lead_score(lead)
     db.commit()
     return lead
 
@@ -69,6 +88,7 @@ async def enrich(lead_id: int, db: Session = Depends(get_db), settings: Settings
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Falha no enriquecimento: {exc}") from exc
     lead.status = LeadStatus.ENRICHED.value
+    refresh_lead_score(lead)
     db.commit()
     return lead
 
@@ -118,4 +138,3 @@ def suppress(lead_id: int, payload: SuppressRequest, db: Session = Depends(get_d
     lead.suppression_reason = payload.reason
     db.commit()
     return lead
-
