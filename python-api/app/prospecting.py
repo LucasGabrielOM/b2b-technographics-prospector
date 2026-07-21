@@ -49,8 +49,12 @@ def _osm_query(lat: float, lon: float, limit: int) -> str:
     return f"""
 [out:json][timeout:30];
 (
-  nwr[\"name\"][\"website\"](around:25000,{lat},{lon});
-  nwr[\"name\"][\"contact:website\"](around:25000,{lat},{lon});
+  nwr[\"name\"][\"website\"][\"shop\"](around:18000,{lat},{lon});
+  nwr[\"name\"][\"website\"][\"office\"](around:18000,{lat},{lon});
+  nwr[\"name\"][\"website\"][\"amenity\"](around:18000,{lat},{lon});
+  nwr[\"name\"][\"contact:website\"][\"shop\"](around:18000,{lat},{lon});
+  nwr[\"name\"][\"contact:website\"][\"office\"](around:18000,{lat},{lon});
+  nwr[\"name\"][\"contact:website\"][\"amenity\"](around:18000,{lat},{lon});
 );
 out tags center {max(limit * 5, 100)};
 """.strip()
