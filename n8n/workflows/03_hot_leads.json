@@ -1,71 +1,80 @@
 {
-  "name": "B2B 03 - Descobrir e priorizar oportunidades",
+  "name": "B2B 03 - Prospecção automática completa",
   "nodes": [
     {
       "parameters": {},
-      "id": "manual-hot",
-      "name": "Executar pesquisa",
+      "id": "manual-trigger",
+      "name": "Testar agora",
       "type": "n8n-nodes-base.manualTrigger",
       "typeVersion": 1,
-      "position": [240, 300]
+      "position": [220, 220]
+    },
+    {
+      "parameters": {"rule": {"interval": [{"field": "days", "daysInterval": 1, "triggerAtHour": 9}]}},
+      "id": "daily-trigger",
+      "name": "Executar diariamente",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [220, 400]
     },
     {
       "parameters": {
-        "jsCode": "const prospects = [{company:'Santa Ilha Imóveis',domain:'santailha.com.br',location:'Florianópolis/SC',pain_score:70,pain_summary:'Relatos públicos sobre demora em vistoria, manutenção e desocupação.',pain_source:'https://www.reclameaqui.com.br/empresa/santa-ilha-imoveis/lista-reclamacoes/'},{company:'Porter Group',domain:'porter.com.br',location:'Florianópolis/SC',pain_score:0},{company:'ParMais',domain:'parmais.com.br',location:'Florianópolis/SC',pain_score:0},{company:'Sua Cirurgia',domain:'suacirurgia.com.br',location:'Florianópolis/SC',pain_score:0},{company:'Super Ótica São José',domain:'superoticasaojose.com.br',location:'Joinville/SC',pain_score:0},{company:'BMW Top Car Florianópolis',domain:'grupotopcar.com.br',location:'Florianópolis/SC',pain_score:70,pain_summary:'Relato público de tentativas de agendamento sem retorno.',pain_source:'https://www.reclameaqui.com.br/top-car-concessionaria-bmw/dificuldade-em-agendar-um-recall-de-airbag_NYd-VtyST5dOL0Y-/'},{company:'BMW Top Car Florianópolis',domain:'bmwtopcar.com.br',location:'Florianópolis/SC',pain_score:70,pain_summary:'Relato público de tentativas de agendamento sem retorno.',pain_source:'https://www.reclameaqui.com.br/top-car-concessionaria-bmw/dificuldade-em-agendar-um-recall-de-airbag_NYd-VtyST5dOL0Y-/'},{company:'BMW Top Car Florianópolis',domain:'bmwmotostopcar.com.br',location:'Florianópolis/SC',pain_score:70,pain_summary:'Relato público de tentativas de agendamento sem retorno.',pain_source:'https://www.reclameaqui.com.br/top-car-concessionaria-bmw/dificuldade-em-agendar-um-recall-de-airbag_NYd-VtyST5dOL0Y-/'},{company:'Hit Honda Florianópolis',domain:'hithonda.com.br',location:'Florianópolis/SC',pain_score:0},{company:'Bajaj EDISA Florianópolis',domain:'bajajedisa.com.br',location:'Florianópolis/SC',pain_score:80,pain_summary:'Relato público de demora prolongada e dificuldade de acompanhamento do pós-venda.',pain_source:'https://www.reclameaqui.com.br/bajaj-do-brasil/reclamacao-contra-concessionaria-bajaj-edisa-florianopolis-falta-de-mao-de_8ZwpGdWiD4zzcfm-/'},{company:'Ibagy Imóveis',domain:'ibagy.com.br',location:'Florianópolis/SC',pain_score:85,pain_summary:'Relatos públicos recentes e recorrentes sobre demora e falta de retorno em manutenção e desocupação.',pain_source:'https://www.reclameaqui.com.br/empresa/ibagy-imoveis/lista-reclamacoes/'},{company:'Geração Hyundai Florianópolis',domain:'hyundaigeracao.com.br',location:'Florianópolis/SC',pain_score:85,pain_summary:'Relato recente de agendamento não cumprido, espera prolongada e diversas tentativas sem retorno.',pain_source:'https://www.reclameaqui.com.br/geracao-hyundai-santa-catarina/agendamento-de-revisao-nao-cumprido-e-falta-de-retorno-da-concessionaria_MKOLleJnyodWCS5A/'}]; return prospects.map(prospect => ({json:{...prospect,domains:[prospect.domain]}}));"
+        "jsCode": "return [{json:{city:'Florianópolis',state:'Santa Catarina',segments:['imobiliária','concessionária','loja','clínica','distribuidora'],limit:25,min_score:45,include_complaints:true}}];"
       },
-      "id": "domain-list",
-      "name": "Definir empresas e sinais públicos",
+      "id": "search-criteria",
+      "name": "Região e público-alvo",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [460, 300]
+      "position": [470, 300]
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "https://b2b-technographics-prospector.onrender.com/api/v1/leads/discover",
+        "url": "https://b2b-technographics-prospector.onrender.com/api/v1/prospect/run",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ { domains: $json.domains } }}",
-        "options": {"timeout": 120000}
+        "jsonBody": "={{ $json }}",
+        "options": {"timeout": 300000}
       },
-      "id": "discover-api",
-      "name": "Descobrir CRM e contato",
+      "id": "autonomous-prospecting",
+      "name": "Pesquisar empresas, sites, CRM, contato e reclamações",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [700, 300],
+      "position": [730, 300],
       "retryOnFail": true,
-      "maxTries": 5,
-      "waitBetweenTries": 5000
+      "maxTries": 3,
+      "waitBetweenTries": 15000
     },
     {
       "parameters": {
-        "jsCode": "const MIN_SCORE=70; const leads=$input.all().flatMap(item=>Array.isArray(item.json)?item.json:[item.json]); const prospects=$('Definir empresas e sinais públicos').all().map(item=>item.json); const ranked=leads.map((lead,index)=>{const prospect=prospects[index]||{}; const technologyScore=Number(lead.lead_score||0); const painScore=Number(prospect.pain_score||0); const score=Math.max(technologyScore,painScore); let opportunity_type='pesquisa adicional'; if(lead.crm&&painScore>=MIN_SCORE) opportunity_type='otimização de processos e CRM'; else if(lead.crm) opportunity_type='otimização de CRM'; else if(painScore>=MIN_SCORE) opportunity_type='implantação de CRM e atendimento'; return {...lead,company:prospect.company||lead.company_name||lead.domain,location:prospect.location,technology_score:technologyScore,pain_score:painScore,score,temperature:score>=70?'hot':score>=45?'warm':'cold',opportunity_type,pain_summary:prospect.pain_summary||null,pain_source:prospect.pain_source||null};}).filter(lead=>lead.id&&lead.score>=MIN_SCORE&&lead.status!=='suppressed'); const unique=new Map(); for(const lead of ranked){const key=lead.company.toLowerCase(); const current=unique.get(key); const currentHasContact=current&&(current.contact_whatsapp||current.contact_email||current.contact_phone); const leadHasContact=lead.contact_whatsapp||lead.contact_email||lead.contact_phone; if(!current||lead.score>current.score||(!current.crm&&lead.crm)||(!currentHasContact&&leadHasContact)) unique.set(key,lead);} const sorted=[...unique.values()].sort((a,b)=>b.score-a.score); if(!sorted.length)return[{json:{message:'Nenhuma oportunidade atingiu 70 pontos.',count:0,suggestion:'Adicione empresas ou novos sinais públicos no primeiro nó.'}}]; return sorted.map((lead,index)=>({json:{priority:index+1,id:lead.id,company:lead.company,domain:lead.domain,location:lead.location,opportunity_type:lead.opportunity_type,crm:lead.crm||'não detectado publicamente',score:lead.score,technology_score:lead.technology_score,pain_score:lead.pain_score,temperature:lead.temperature,contact_name:lead.contact_name,preferred_contact:lead.contact_whatsapp||lead.contact_email||lead.contact_phone||'não encontrado',contact_email:lead.contact_email,contact_whatsapp:lead.contact_whatsapp,contact_phone:lead.contact_phone,technology_reasons:lead.score_reasons,pain_summary:lead.pain_summary,pain_source:lead.pain_source,evidence:lead.evidence,status:lead.status}}));"
+        "jsCode": "const leads=$input.all().flatMap(i=>Array.isArray(i.json)?i.json:[i.json]).filter(l=>l&&l.id&&l.status!=='suppressed'); leads.sort((a,b)=>(b.lead_score||0)-(a.lead_score||0)); return leads.map((lead,index)=>({json:{priority:index+1,...lead,opportunity_type:lead.crm&&lead.pain_score>=45?'otimização de processos e CRM':lead.crm?'otimização de CRM':lead.pain_score>=45?'implantação de CRM e melhoria do atendimento':'automação comercial'}}));"
       },
-      "id": "rank-hot",
-      "name": "Mostrar oportunidades quentes",
+      "id": "rank-leads",
+      "name": "Priorizar oportunidades",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [950, 300]
+      "position": [1010, 300]
     },
     {
       "parameters": {
-        "jsCode": "return $input.all().map(item=>{const lead=item.json;if(!lead.id)return item;const hasCrm=lead.crm&&lead.crm!=='não detectado publicamente';const message=hasCrm?`Olá! Falo da equipe de projetos do Lucas Gabriel. Trabalhamos com integrações e automações para reduzir tarefas manuais e melhorar o acompanhamento de atendimentos no CRM. Gostaria de falar com a pessoa responsável pelo CRM ou pelos processos comerciais da ${lead.company}. Poderiam me direcionar?`:`Olá! Falo da equipe de projetos do Lucas Gabriel. Trabalhamos com organização de atendimento, implantação de CRM e automação de retornos por WhatsApp. Gostaria de falar com a pessoa responsável pelos processos comerciais ou pelo pós-venda da ${lead.company}. Poderiam me direcionar?`;const whatsappDigits=String(lead.contact_whatsapp||'').replace(/\\D/g,'');const whatsappPhone=whatsappDigits?`+${whatsappDigits}`:'';const whatsapp_link=whatsappDigits.length>=12&&!whatsappDigits.includes('0800')?`https://api.whatsapp.com/send/?phone=${encodeURIComponent(whatsappPhone)}&text=${encodeURIComponent(message)}`:null;const email_subject=hasCrm?'Automação e integração de processos':'Organização e automação do atendimento';const email_link=lead.contact_email?`mailto:${lead.contact_email}?subject=${encodeURIComponent(email_subject)}&body=${encodeURIComponent(message)}`:null;const recommended_channel=whatsapp_link?'WhatsApp':email_link?'E-mail':lead.contact_phone?'Telefone':'Contato não encontrado';return{json:{...lead,recommended_channel,outreach_message:message,whatsapp_link,email_subject,email_link,send_status:'aguardando revisão manual'}};});"
+        "jsCode": "return $input.all().map(item=>{const lead=item.json;const company=lead.company_name||lead.domain;const hasCrm=Boolean(lead.crm);const pain=lead.pain_summary?` Identificamos sinais públicos de oportunidade no atendimento, sem presumir detalhes internos.`:'';const message=hasCrm?`Olá! Sou Lucas Gabriel, da equipe de projetos. Encontramos sinais públicos de uso do ${lead.crm} na ${company}.${pain} Trabalhamos com integrações e automações para reduzir tarefas manuais e melhorar o acompanhamento comercial. Posso falar com a pessoa responsável pelo CRM ou pelos processos comerciais?`:`Olá! Sou Lucas Gabriel, da equipe de projetos.${pain} Trabalhamos com implantação de CRM e automação de atendimento e retornos. Posso falar com a pessoa responsável pelos processos comerciais ou pelo pós-venda da ${company}?`;const digits=String(lead.contact_whatsapp||'').replace(/\\D/g,'');const whatsapp_link=digits.length>=12&&!digits.includes('0800')?`https://api.whatsapp.com/send/?phone=${encodeURIComponent('+'+digits)}&text=${encodeURIComponent(message)}`:null;const subject=hasCrm?`Automação e integração para ${company}`:`Organização do atendimento da ${company}`;const email_link=lead.contact_email?`mailto:${lead.contact_email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(message)}`:null;return{json:{...lead,recommended_channel:whatsapp_link?'WhatsApp':email_link?'E-mail':lead.contact_phone?'Telefone':'contato não encontrado',outreach_message:message,whatsapp_link,email_subject:subject,email_link,send_status:'mensagem pronta para envio'}};});"
       },
       "id": "prepare-outreach",
-      "name": "Preparar mensagem e links de envio",
+      "name": "Preparar contato e mensagem",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1200, 300]
+      "position": [1270, 300]
     }
   ],
   "connections": {
-    "Executar pesquisa": {"main": [[{"node": "Definir empresas e sinais públicos", "type": "main", "index": 0}]]},
-    "Definir empresas e sinais públicos": {"main": [[{"node": "Descobrir CRM e contato", "type": "main", "index": 0}]]},
-    "Descobrir CRM e contato": {"main": [[{"node": "Mostrar oportunidades quentes", "type": "main", "index": 0}]]},
-    "Mostrar oportunidades quentes": {"main": [[{"node": "Preparar mensagem e links de envio", "type": "main", "index": 0}]]}
+    "Testar agora": {"main": [[{"node": "Região e público-alvo", "type": "main", "index": 0}]]},
+    "Executar diariamente": {"main": [[{"node": "Região e público-alvo", "type": "main", "index": 0}]]},
+    "Região e público-alvo": {"main": [[{"node": "Pesquisar empresas, sites, CRM, contato e reclamações", "type": "main", "index": 0}]]},
+    "Pesquisar empresas, sites, CRM, contato e reclamações": {"main": [[{"node": "Priorizar oportunidades", "type": "main", "index": 0}]]},
+    "Priorizar oportunidades": {"main": [[{"node": "Preparar contato e mensagem", "type": "main", "index": 0}]]}
   },
   "pinData": {},
-  "settings": {"executionOrder": "v1"},
+  "settings": {"executionOrder": "v1", "timezone": "America/Sao_Paulo"},
   "active": false,
-  "versionId": "fe901989-9971-4b04-b63c-2d8da94d96f4"
+  "versionId": "7f1cfc6c-a80a-49b3-a851-3a1a146fbe25"
 }

@@ -1,3 +1,5 @@
+import asyncio
+
 from fastapi import Depends, FastAPI, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -5,7 +7,8 @@ from sqlalchemy.orm import Session
 from .config import Settings, get_settings
 from .database import Base, engine, ensure_lead_contact_columns, get_db
 from .models import Lead, LeadStatus
-from .schemas import DiscoveryRequest, GenerateRequest, LeadOut, LeadPatch, SuppressRequest
+from .prospecting import discover_businesses, map_complaints
+from .schemas import DiscoveryRequest, GenerateRequest, LeadOut, LeadPatch, ProspectRequest, SuppressRequest
 from .services import dispatch, enrich_with_hunter, generate_draft, is_business_email, refresh_lead_score, scan_domain
 
 Base.metadata.create_all(bind=engine)
@@ -42,6 +45,55 @@ async def discover(payload: DiscoveryRequest, db: Session = Depends(get_db), set
         refresh_lead_score(lead)
         result.append(lead)
     db.commit()
+    return result
+
+
+@app.post("/api/v1/prospect/run", response_model=list[LeadOut])
+async def run_prospecting(
+    payload: ProspectRequest,
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+):
+    """Descobre empresas e executa todo o enriquecimento sem receber domínios manualmente."""
+    try:
+        prospects = await discover_businesses(payload.city, payload.state, payload.segments, payload.limit, settings)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Falha ao descobrir empresas: {exc}") from exc
+    if not prospects:
+        raise HTTPException(status_code=404, detail="Nenhuma empresa com site foi encontrada para a região informada")
+    prospects = await map_complaints(prospects, settings, payload.include_complaints)
+    semaphore = asyncio.Semaphore(max(1, settings.discovery_concurrency))
+
+    async def scan(item: dict) -> tuple[dict, dict]:
+        async with semaphore:
+            return item, await scan_domain(item["domain"], settings)
+
+    scanned = await asyncio.gather(*(scan(item) for item in prospects))
+    result = []
+    for item, scan_result in scanned:
+        lead = db.scalar(select(Lead).where(Lead.domain == item["domain"]))
+        if lead is None:
+            lead = Lead(domain=item["domain"])
+            db.add(lead)
+        lead.company_name = item["company_name"] or lead.company_name
+        lead.location = item["location"]
+        lead.sector = item.get("sector") or lead.sector
+        lead.discovery_source = item["source"]
+        lead.crm = scan_result["crm"]
+        lead.confidence = scan_result["confidence"]
+        lead.evidence = scan_result["evidence"]
+        lead.pain_score = item.get("pain_score", 0)
+        lead.pain_summary = item.get("pain_summary")
+        lead.pain_source = item.get("pain_source")
+        if not is_business_email(lead.contact_email):
+            lead.contact_email = scan_result["public_emails"][0] if scan_result["public_emails"] else None
+        lead.contact_phone = scan_result["public_phones"][0] if scan_result["public_phones"] else lead.contact_phone
+        lead.contact_whatsapp = scan_result["public_whatsapps"][0] if scan_result["public_whatsapps"] else lead.contact_whatsapp
+        refresh_lead_score(lead)
+        if lead.lead_score >= payload.min_score and lead.status != LeadStatus.SUPPRESSED.value:
+            result.append(lead)
+    db.commit()
+    result.sort(key=lambda lead: (lead.lead_score, lead.confidence), reverse=True)
     return result
 
 
