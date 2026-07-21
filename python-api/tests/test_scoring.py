@@ -54,3 +54,11 @@ def test_public_phones_extracts_tel_and_whatsapp_links():
     phones, whatsapps = _public_phones(soup)
     assert phones == ["+554833334444"]
     assert whatsapps == ["+5548999998888"]
+
+
+def test_toll_free_number_is_not_treated_as_whatsapp():
+    soup = BeautifulSoup('<a href="https://wa.me/08009401120">Contato</a>', "html.parser")
+
+    phones, whatsapps = _public_phones(soup)
+    assert phones == []
+    assert whatsapps == []

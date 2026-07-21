@@ -64,6 +64,10 @@ def _email_priority(email: str, domain: str) -> tuple[int, int, str]:
 
 def _normalize_br_phone(value: str) -> str | None:
     digits = re.sub(r"\D", "", value)
+    if digits.startswith("550800"):
+        digits = digits[2:]
+    if digits.startswith("0800") and len(digits) == 11:
+        return digits
     if len(digits) in {10, 11}:
         digits = "55" + digits
     if len(digits) not in {12, 13} or not digits.startswith("55"):
@@ -85,7 +89,7 @@ def _public_phones(soup: BeautifulSoup) -> tuple[list[str], list[str]]:
         if hostname == "wa.me" or hostname.endswith("whatsapp.com"):
             raw_phone = parsed.path.strip("/") if hostname == "wa.me" else parse_qs(parsed.query).get("phone", [""])[0]
             phone = _normalize_br_phone(raw_phone)
-            if phone:
+            if phone and phone.startswith("+"):
                 whatsapps.add(phone)
     if not phones:
         for match in PHONE_RE.findall(soup.get_text(" ", strip=True)):

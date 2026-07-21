@@ -60,6 +60,8 @@ O detector visita a página inicial e até quatro páginas públicas relacionada
 
 Temperaturas: `hot` a partir de 70, `warm` a partir de 45 e `cold` abaixo disso. O workflow **B2B 03 - Descobrir e priorizar leads quentes** reúne todo o teste inicial: recebe os domínios, executa a descoberta, calcula o score e mostra somente os leads quentes. Para testar no n8n, basta importar esse único workflow. O score prioriza revisão; ele não autoriza envio automático.
 
+O último nó do workflow 03 prepara uma abordagem e cria links de WhatsApp ou e-mail. O envio é manual e permanece com status `aguardando revisão manual`, evitando disparos acidentais durante os testes.
+
 ## Integrações e extensões
 
 - `app/services.py`: assinaturas de Bitrix24, HubSpot, Salesforce, RD Station e Pipedrive.
