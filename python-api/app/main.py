@@ -76,7 +76,6 @@ async def run_prospecting(
         } for lead in cached]
     if not prospects:
         return []
-    prospects = await map_complaints(prospects, settings, payload.include_complaints)
     semaphore = asyncio.Semaphore(max(1, settings.discovery_concurrency))
 
     async def scan(item: dict) -> tuple[dict, dict]:
@@ -84,8 +83,16 @@ async def run_prospecting(
             return item, await scan_domain(item["domain"], settings)
 
     scanned = await asyncio.gather(*(scan(item) for item in prospects))
+    contact_candidates = [
+        item for item, scan_result in scanned
+        if scan_result["public_emails"] or scan_result["public_phones"] or scan_result["public_whatsapps"]
+    ]
+    complaint_candidates = contact_candidates[:max(payload.target_contacts, 60)]
+    researched = await map_complaints(complaint_candidates, settings, payload.include_complaints)
+    pain_by_domain = {item["domain"]: item for item in researched}
     result = []
     for item, scan_result in scanned:
+        item = {**item, **pain_by_domain.get(item["domain"], {})}
         lead = db.scalar(select(Lead).where(Lead.domain == item["domain"]))
         if lead is None:
             lead = Lead(domain=item["domain"])
@@ -108,8 +115,12 @@ async def run_prospecting(
         if lead.lead_score >= payload.min_score and lead.status != LeadStatus.SUPPRESSED.value:
             result.append(lead)
     db.commit()
-    result.sort(key=lambda lead: (lead.lead_score, lead.confidence), reverse=True)
-    return result
+    result.sort(key=lambda lead: (
+        bool(lead.contact_whatsapp or lead.contact_email or lead.contact_phone),
+        lead.lead_score,
+        lead.confidence,
+    ), reverse=True)
+    return result[:payload.limit]
 
 
 @app.get("/api/v1/leads", response_model=list[LeadOut])

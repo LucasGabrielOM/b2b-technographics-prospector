@@ -23,8 +23,9 @@ class ProspectRequest(BaseModel):
         min_length=1,
         max_length=12,
     )
-    limit: int = Field(default=20, ge=1, le=60)
-    min_score: int = Field(default=45, ge=0, le=100)
+    limit: int = Field(default=100, ge=1, le=150)
+    target_contacts: int = Field(default=50, ge=1, le=100)
+    min_score: int = Field(default=0, ge=0, le=100)
     include_complaints: bool = True
 
 

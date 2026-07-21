@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     outreach_webhook_url: str | None = None
     crawler_user_agent: str = "B2BProspector/1.0 (https://github.com/LucasGabrielOM/b2b-technographics-prospector)"
     request_timeout_seconds: float = 12
-    discovery_concurrency: int = 4
+    discovery_concurrency: int = 8
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 
