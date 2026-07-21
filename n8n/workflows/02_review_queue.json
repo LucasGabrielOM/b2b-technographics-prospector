@@ -1,0 +1,45 @@
+{
+  "name": "B2B 02 - Fila de revisão de rascunhos",
+  "nodes": [
+    {
+      "parameters": {"rule": {"interval": [{"field": "hours", "hoursInterval": 4}]}},
+      "id": "schedule",
+      "name": "A cada 4 horas",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [260, 300]
+    },
+    {
+      "parameters": {
+        "url": "={{$env.API_BASE_URL}}/api/v1/leads",
+        "sendQuery": true,
+        "queryParameters": {"parameters": [{"name": "status", "value": "drafted"}]},
+        "options": {}
+      },
+      "id": "draft-list",
+      "name": "Buscar rascunhos",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [500, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const leads = Array.isArray($json) ? $json : [$json]; return [{json: {count: leads.length, message: `${leads.length} lead(s) aguardando revisão`, leads}}];"
+      },
+      "id": "summary",
+      "name": "Resumo para revisão",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [740, 300]
+    }
+  ],
+  "connections": {
+    "A cada 4 horas": {"main": [[{"node": "Buscar rascunhos", "type": "main", "index": 0}]]},
+    "Buscar rascunhos": {"main": [[{"node": "Resumo para revisão", "type": "main", "index": 0}]]}
+  },
+  "pinData": {},
+  "settings": {"executionOrder": "v1"},
+  "active": false,
+  "versionId": "250a9387-b606-4fa9-a4ee-1d474cb59b8d"
+}
+

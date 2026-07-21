@@ -1,0 +1,47 @@
+{
+  "name": "B2B 01 - Descoberta de technographics",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "manual-trigger",
+      "name": "Executar manualmente",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [260, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: { domains: ['exemplo.com.br', 'empresa.com.br'] } }];"
+      },
+      "id": "domain-list",
+      "name": "Definir domínios",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [480, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.API_BASE_URL}}/api/v1/leads/discover",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{$json}}",
+        "options": {}
+      },
+      "id": "discover-api",
+      "name": "Detectar CRM",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [700, 300]
+    }
+  ],
+  "connections": {
+    "Executar manualmente": {"main": [[{"node": "Definir domínios", "type": "main", "index": 0}]]},
+    "Definir domínios": {"main": [[{"node": "Detectar CRM", "type": "main", "index": 0}]]}
+  },
+  "pinData": {},
+  "settings": {"executionOrder": "v1"},
+  "active": false,
+  "versionId": "38e97e36-35bd-42a4-940f-c7a7f5d91962"
+}
+
