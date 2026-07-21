@@ -45,13 +45,12 @@ def normalize_domain(value: str | None) -> str | None:
     return host
 
 
-def _osm_query(area_id: int, limit: int) -> str:
+def _osm_query(lat: float, lon: float, limit: int) -> str:
     return f"""
 [out:json][timeout:30];
-area({area_id})->.searchArea;
 (
-  nwr[\"name\"][\"website\"](area.searchArea);
-  nwr[\"name\"][\"contact:website\"](area.searchArea);
+  nwr[\"name\"][\"website\"](around:25000,{lat},{lon});
+  nwr[\"name\"][\"contact:website\"](around:25000,{lat},{lon});
 );
 out tags center {max(limit * 5, 100)};
 """.strip()
@@ -69,11 +68,17 @@ async def discover_from_osm(city: str, state: str, segments: list[str], limit: i
         places = geo.json()
         if not places:
             return []
-        osm_type = places[0].get("osm_type")
-        osm_id = int(places[0]["osm_id"])
-        area_id = osm_id + (3_600_000_000 if osm_type == "relation" else 2_400_000_000)
-        response = await client.post("https://overpass-api.de/api/interpreter", content=_osm_query(area_id, limit))
-        response.raise_for_status()
+        lat, lon = float(places[0]["lat"]), float(places[0]["lon"])
+        last_error = None
+        for endpoint in ("https://overpass-api.de/api/interpreter", "https://overpass.kumi.systems/api/interpreter"):
+            try:
+                response = await client.post(endpoint, content=_osm_query(lat, lon, limit))
+                response.raise_for_status()
+                break
+            except httpx.HTTPError as exc:
+                last_error = exc
+        else:
+            raise last_error or RuntimeError("Overpass indisponível")
 
     prospects: list[dict] = []
     seen: set[str] = set()
