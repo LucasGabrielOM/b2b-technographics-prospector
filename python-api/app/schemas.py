@@ -22,6 +22,8 @@ class LeadPatch(BaseModel):
     contact_name: str | None = None
     contact_role: str | None = None
     contact_email: EmailStr | None = None
+    contact_phone: str | None = Field(default=None, max_length=40)
+    contact_whatsapp: str | None = Field(default=None, max_length=40)
 
 
 class GenerateRequest(BaseModel):
@@ -50,6 +52,8 @@ class LeadOut(BaseModel):
     contact_name: str | None
     contact_role: str | None
     contact_email: str | None
+    contact_phone: str | None
+    contact_whatsapp: str | None
     email_subject: str | None
     email_body: str | None
     status: str

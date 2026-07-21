@@ -4,14 +4,16 @@ def test_health(client):
 
 def test_manual_lead_pipeline_requires_email_and_approval(client, monkeypatch):
     async def fake_scan(domain, settings):
-        return {"crm": "Bitrix24", "confidence": 0.85, "evidence": [{"source": f"https://{domain}", "technology": "Bitrix24"}], "public_emails": [], "pages_scanned": 1}
+        return {"crm": "Bitrix24", "confidence": 0.85, "evidence": [{"source": f"https://{domain}", "technology": "Bitrix24"}], "public_emails": [], "public_phones": ["+5548999999999"], "public_whatsapps": ["+5548999999999"], "pages_scanned": 1}
 
     monkeypatch.setattr("app.main.scan_domain", fake_scan)
     lead = client.post("/api/v1/leads/discover", json={"domains": ["Example.com/path"]}).json()[0]
     assert lead["domain"] == "example.com"
     assert lead["crm"] == "Bitrix24"
-    assert lead["lead_score"] == 50
-    assert lead["temperature"] == "warm"
+    assert lead["lead_score"] == 70
+    assert lead["temperature"] == "hot"
+    assert lead["contact_phone"] == "+5548999999999"
+    assert lead["contact_whatsapp"] == "+5548999999999"
 
     generated = client.post(f"/api/v1/leads/{lead['id']}/generate", json={}).json()
     assert generated["status"] == "drafted"
@@ -28,7 +30,7 @@ def test_manual_lead_pipeline_requires_email_and_approval(client, monkeypatch):
 
 def test_suppressed_lead_cannot_generate(client, monkeypatch):
     async def fake_scan(domain, settings):
-        return {"crm": None, "confidence": 0, "evidence": [], "public_emails": [], "pages_scanned": 1}
+        return {"crm": None, "confidence": 0, "evidence": [], "public_emails": [], "public_phones": [], "public_whatsapps": [], "pages_scanned": 1}
 
     monkeypatch.setattr("app.main.scan_domain", fake_scan)
     lead = client.post("/api/v1/leads/discover", json={"domains": ["example.org"]}).json()[0]
