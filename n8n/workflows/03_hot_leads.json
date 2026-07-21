@@ -11,7 +11,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const domains = ['santailha.com.br', 'porter.com.br', 'parmais.com.br', 'suacirurgia.com.br', 'superoticasaojose.com.br']; return domains.map(domain => ({ json: { domains: [domain] } }));"
+        "jsCode": "const domains = ['santailha.com.br', 'porter.com.br', 'parmais.com.br', 'suacirurgia.com.br', 'superoticasaojose.com.br', 'grupotopcar.com.br', 'bmwtopcar.com.br', 'bmwmotostopcar.com.br', 'hithonda.com.br', 'bajajedisa.com.br']; return domains.map(domain => ({ json: { domains: [domain] } }));"
       },
       "id": "domain-list",
       "name": "Definir domínios para pesquisar",
@@ -39,7 +39,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const MIN_SCORE = 70; const locations = {'santailha.com.br':'Florianópolis/SC','porter.com.br':'Florianópolis/SC','parmais.com.br':'Florianópolis/SC','suacirurgia.com.br':'Florianópolis/SC','superoticasaojose.com.br':'Joinville/SC'}; const leads = $input.all().flatMap(item => Array.isArray(item.json) ? item.json : [item.json]).filter(lead => lead && lead.id && locations[lead.domain] && Number(lead.lead_score || 0) >= MIN_SCORE && lead.status !== 'suppressed').sort((a, b) => Number(b.lead_score || 0) - Number(a.lead_score || 0)); if (!leads.length) return [{ json: { message: 'Nenhum lead de Santa Catarina atingiu 70 pontos nesta pesquisa.', count: 0, suggestion: 'Revise os resultados mornos ou adicione novos domínios catarinenses.' } }]; return leads.map((lead, index) => ({ json: { priority: index + 1, id: lead.id, domain: lead.domain, company: lead.company_name || lead.domain, location: locations[lead.domain], crm: lead.crm, score: lead.lead_score, temperature: lead.temperature, contact_name: lead.contact_name, contact_email: lead.contact_email, reasons: lead.score_reasons, evidence: lead.evidence, status: lead.status } }));"
+        "jsCode": "const MIN_SCORE = 70; const locations = {'santailha.com.br':'Florianópolis/SC','porter.com.br':'Florianópolis/SC','parmais.com.br':'Florianópolis/SC','suacirurgia.com.br':'Florianópolis/SC','superoticasaojose.com.br':'Joinville/SC','grupotopcar.com.br':'Florianópolis/SC','bmwtopcar.com.br':'Florianópolis/SC','bmwmotostopcar.com.br':'Florianópolis/SC','hithonda.com.br':'Florianópolis/SC','bajajedisa.com.br':'Florianópolis/SC'}; const leads = $input.all().flatMap(item => Array.isArray(item.json) ? item.json : [item.json]).filter(lead => lead && lead.id && locations[lead.domain] && Number(lead.lead_score || 0) >= MIN_SCORE && lead.status !== 'suppressed').sort((a, b) => Number(b.lead_score || 0) - Number(a.lead_score || 0)); if (!leads.length) return [{ json: { message: 'Nenhum lead de Santa Catarina atingiu 70 pontos nesta pesquisa.', count: 0, suggestion: 'Revise os resultados mornos ou adicione novos domínios catarinenses.' } }]; return leads.map((lead, index) => ({ json: { priority: index + 1, id: lead.id, domain: lead.domain, company: lead.company_name || lead.domain, location: locations[lead.domain], crm: lead.crm, score: lead.lead_score, temperature: lead.temperature, contact_name: lead.contact_name, contact_email: lead.contact_email, reasons: lead.score_reasons, evidence: lead.evidence, status: lead.status } }));"
       },
       "id": "rank-hot",
       "name": "Mostrar somente leads quentes",
