@@ -11,7 +11,7 @@
     },
     {
       "parameters": {
-        "jsCode": "return [{ json: { domains: ['fusionsj.com.br', 'site.rbdistribuidora.com.br', 'maino.com.br', 'okena.eco.br', 'fibersals.com.br', 'superoticasaojose.com.br', 'parmais.com.br', 'suacirurgia.com.br'] } }];"
+        "jsCode": "const domains = ['fusionsj.com.br', 'site.rbdistribuidora.com.br', 'maino.com.br', 'okena.eco.br', 'fibersals.com.br', 'superoticasaojose.com.br', 'parmais.com.br', 'suacirurgia.com.br']; return domains.map(domain => ({ json: { domains: [domain] } }));"
       },
       "id": "domain-list",
       "name": "Definir domínios para pesquisar",
@@ -32,7 +32,10 @@
       "name": "Descobrir CRM e pontuar",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [700, 300]
+      "position": [700, 300],
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000
     },
     {
       "parameters": {
