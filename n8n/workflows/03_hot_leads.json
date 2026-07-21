@@ -46,12 +46,23 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [950, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.all().map(item=>{const lead=item.json;if(!lead.id)return item;const hasCrm=lead.crm&&lead.crm!=='não detectado publicamente';const message=hasCrm?`Olá! Falo da equipe de projetos do Lucas Gabriel. Trabalhamos com integrações e automações para reduzir tarefas manuais e melhorar o acompanhamento de atendimentos no CRM. Gostaria de falar com a pessoa responsável pelo CRM ou pelos processos comerciais da ${lead.company}. Poderiam me direcionar?`:`Olá! Falo da equipe de projetos do Lucas Gabriel. Trabalhamos com organização de atendimento, implantação de CRM e automação de retornos por WhatsApp. Gostaria de falar com a pessoa responsável pelos processos comerciais ou pelo pós-venda da ${lead.company}. Poderiam me direcionar?`;const whatsappDigits=String(lead.contact_whatsapp||'').replace(/\\D/g,'');const whatsapp_link=whatsappDigits.length>=12&&!whatsappDigits.includes('0800')?`https://wa.me/${whatsappDigits}?text=${encodeURIComponent(message)}`:null;const email_subject=hasCrm?'Automação e integração de processos':'Organização e automação do atendimento';const email_link=lead.contact_email?`mailto:${lead.contact_email}?subject=${encodeURIComponent(email_subject)}&body=${encodeURIComponent(message)}`:null;const recommended_channel=whatsapp_link?'WhatsApp':email_link?'E-mail':lead.contact_phone?'Telefone':'Contato não encontrado';return{json:{...lead,recommended_channel,outreach_message:message,whatsapp_link,email_subject,email_link,send_status:'aguardando revisão manual'}};});"
+      },
+      "id": "prepare-outreach",
+      "name": "Preparar mensagem e links de envio",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1200, 300]
     }
   ],
   "connections": {
     "Executar pesquisa": {"main": [[{"node": "Definir empresas e sinais públicos", "type": "main", "index": 0}]]},
     "Definir empresas e sinais públicos": {"main": [[{"node": "Descobrir CRM e contato", "type": "main", "index": 0}]]},
-    "Descobrir CRM e contato": {"main": [[{"node": "Mostrar oportunidades quentes", "type": "main", "index": 0}]]}
+    "Descobrir CRM e contato": {"main": [[{"node": "Mostrar oportunidades quentes", "type": "main", "index": 0}]]},
+    "Mostrar oportunidades quentes": {"main": [[{"node": "Preparar mensagem e links de envio", "type": "main", "index": 0}]]}
   },
   "pinData": {},
   "settings": {"executionOrder": "v1"},
