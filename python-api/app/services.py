@@ -50,6 +50,10 @@ def _public_emails(searchable: str, domain: str) -> list[str]:
     return sorted(business_emails, key=lambda email: _email_priority(email, domain))
 
 
+def is_business_email(email: str | None) -> bool:
+    return bool(email and "@" in email and email.rsplit("@", 1)[-1].lower() not in FREE_EMAIL_DOMAINS)
+
+
 def _email_priority(email: str, domain: str) -> tuple[int, int, str]:
     local_part, email_domain = email.rsplit("@", 1)
     same_domain = email_domain == domain or domain.endswith("." + email_domain) or email_domain.endswith("." + domain)

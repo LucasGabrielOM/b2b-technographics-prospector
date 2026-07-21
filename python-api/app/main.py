@@ -6,7 +6,7 @@ from .config import Settings, get_settings
 from .database import Base, engine, get_db
 from .models import Lead, LeadStatus
 from .schemas import DiscoveryRequest, GenerateRequest, LeadOut, LeadPatch, SuppressRequest
-from .services import dispatch, enrich_with_hunter, generate_draft, refresh_lead_score, scan_domain
+from .services import dispatch, enrich_with_hunter, generate_draft, is_business_email, refresh_lead_score, scan_domain
 
 Base.metadata.create_all(bind=engine)
 app = FastAPI(title="B2B Technographics Prospector", version="0.1.0")
@@ -34,8 +34,8 @@ async def discover(payload: DiscoveryRequest, db: Session = Depends(get_db), set
             lead = Lead(domain=domain)
             db.add(lead)
         lead.crm, lead.confidence, lead.evidence = scan["crm"], scan["confidence"], scan["evidence"]
-        if not lead.contact_email and scan["public_emails"]:
-            lead.contact_email = scan["public_emails"][0]
+        if not is_business_email(lead.contact_email):
+            lead.contact_email = scan["public_emails"][0] if scan["public_emails"] else None
         refresh_lead_score(lead)
         result.append(lead)
     db.commit()

@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 
-from app.services import _public_emails, calculate_lead_score
+from app.services import _public_emails, calculate_lead_score, is_business_email
 
 
 def test_score_is_transparent_and_capped():
@@ -39,3 +39,5 @@ def test_public_email_prefers_business_domain_and_ignores_free_mail():
         "b2b@empresa.com.br",
         "contato@empresa.com.br",
     ]
+    assert not is_business_email("pessoa@gmail.com")
+    assert is_business_email("vendas@empresa.com.br")
