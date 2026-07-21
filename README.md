@@ -31,6 +31,8 @@ docker compose exec n8n n8n import:workflow --separate --input=/workflows
 
 Sem `OPENAI_API_KEY`, os rascunhos usam um gerador determinístico para permitir o teste completo. Sem `HUNTER_API_KEY`, o contato pode ser preenchido manualmente pela API. O envio só funciona quando o lead está `approved`, `OUTREACH_ENABLED=true` e `OUTREACH_WEBHOOK_URL` está configurado.
 
+O runtime Python está fixado na série 3.12 por `python-api/.python-version`, inclusive para deploys nativos no Render.
+
 ## Primeiro teste
 
 1. Abra o workflow **B2B 01 - Descoberta de technographics**.
@@ -77,4 +79,3 @@ pytest -q
 4. Painel de revisão ou notificações Slack/Teams/Telegram.
 5. Métricas de origem, confiança, aprovação, resposta e opt-out.
 6. Testes de prompts com amostra real antes de habilitar envio.
-
