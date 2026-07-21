@@ -58,9 +58,24 @@ async def run_prospecting(
     try:
         prospects = await discover_businesses(payload.city, payload.state, payload.segments, payload.limit, settings)
     except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"Falha ao descobrir empresas: {exc}") from exc
+        prospects = []
     if not prospects:
-        raise HTTPException(status_code=404, detail="Nenhuma empresa com site foi encontrada para a região informada")
+        cached = list(db.scalars(
+            select(Lead)
+            .where(Lead.location.ilike(f"{payload.city}/%"), Lead.status != LeadStatus.SUPPRESSED.value)
+            .order_by(Lead.updated_at.desc())
+            .limit(payload.limit)
+        ))
+        prospects = [{
+            "company_name": lead.company_name or lead.domain,
+            "domain": lead.domain,
+            "location": lead.location or f"{payload.city}/{payload.state}",
+            "sector": lead.sector,
+            "source": lead.discovery_source or f"https://{lead.domain}",
+            "segment_match": True,
+        } for lead in cached]
+    if not prospects:
+        return []
     prospects = await map_complaints(prospects, settings, payload.include_complaints)
     semaphore = asyncio.Semaphore(max(1, settings.discovery_concurrency))
 
