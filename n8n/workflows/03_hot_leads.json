@@ -1,5 +1,5 @@
 {
-  "name": "B2B 03 - Descobrir e priorizar leads quentes",
+  "name": "B2B 03 - Descobrir e priorizar oportunidades",
   "nodes": [
     {
       "parameters": {},
@@ -11,10 +11,10 @@
     },
     {
       "parameters": {
-        "jsCode": "const domains = ['santailha.com.br', 'porter.com.br', 'parmais.com.br', 'suacirurgia.com.br', 'superoticasaojose.com.br', 'grupotopcar.com.br', 'bmwtopcar.com.br', 'bmwmotostopcar.com.br', 'hithonda.com.br', 'bajajedisa.com.br']; return domains.map(domain => ({ json: { domains: [domain] } }));"
+        "jsCode": "const prospects = [{company:'Santa Ilha Imóveis',domain:'santailha.com.br',location:'Florianópolis/SC',pain_score:70,pain_summary:'Relatos públicos sobre demora em vistoria, manutenção e desocupação.',pain_source:'https://www.reclameaqui.com.br/empresa/santa-ilha-imoveis/lista-reclamacoes/'},{company:'Porter Group',domain:'porter.com.br',location:'Florianópolis/SC',pain_score:0},{company:'ParMais',domain:'parmais.com.br',location:'Florianópolis/SC',pain_score:0},{company:'Sua Cirurgia',domain:'suacirurgia.com.br',location:'Florianópolis/SC',pain_score:0},{company:'Super Ótica São José',domain:'superoticasaojose.com.br',location:'Joinville/SC',pain_score:0},{company:'BMW Top Car Florianópolis',domain:'grupotopcar.com.br',location:'Florianópolis/SC',pain_score:70,pain_summary:'Relato público de tentativas de agendamento sem retorno.',pain_source:'https://www.reclameaqui.com.br/top-car-concessionaria-bmw/dificuldade-em-agendar-um-recall-de-airbag_NYd-VtyST5dOL0Y-/'},{company:'BMW Top Car Florianópolis',domain:'bmwtopcar.com.br',location:'Florianópolis/SC',pain_score:70,pain_summary:'Relato público de tentativas de agendamento sem retorno.',pain_source:'https://www.reclameaqui.com.br/top-car-concessionaria-bmw/dificuldade-em-agendar-um-recall-de-airbag_NYd-VtyST5dOL0Y-/'},{company:'BMW Top Car Florianópolis',domain:'bmwmotostopcar.com.br',location:'Florianópolis/SC',pain_score:70,pain_summary:'Relato público de tentativas de agendamento sem retorno.',pain_source:'https://www.reclameaqui.com.br/top-car-concessionaria-bmw/dificuldade-em-agendar-um-recall-de-airbag_NYd-VtyST5dOL0Y-/'},{company:'Hit Honda Florianópolis',domain:'hithonda.com.br',location:'Florianópolis/SC',pain_score:0},{company:'Bajaj EDISA Florianópolis',domain:'bajajedisa.com.br',location:'Florianópolis/SC',pain_score:80,pain_summary:'Relato público de demora prolongada e dificuldade de acompanhamento do pós-venda.',pain_source:'https://www.reclameaqui.com.br/bajaj-do-brasil/reclamacao-contra-concessionaria-bajaj-edisa-florianopolis-falta-de-mao-de_8ZwpGdWiD4zzcfm-/'},{company:'Ibagy Imóveis',domain:'ibagy.com.br',location:'Florianópolis/SC',pain_score:85,pain_summary:'Relatos públicos recentes e recorrentes sobre demora e falta de retorno em manutenção e desocupação.',pain_source:'https://www.reclameaqui.com.br/empresa/ibagy-imoveis/lista-reclamacoes/'},{company:'Geração Hyundai Florianópolis',domain:'hyundaigeracao.com.br',location:'Florianópolis/SC',pain_score:85,pain_summary:'Relato recente de agendamento não cumprido, espera prolongada e diversas tentativas sem retorno.',pain_source:'https://www.reclameaqui.com.br/geracao-hyundai-santa-catarina/agendamento-de-revisao-nao-cumprido-e-falta-de-retorno-da-concessionaria_MKOLleJnyodWCS5A/'}]; return prospects.map(prospect => ({json:{...prospect,domains:[prospect.domain]}}));"
       },
       "id": "domain-list",
-      "name": "Definir domínios para pesquisar",
+      "name": "Definir empresas e sinais públicos",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [460, 300]
@@ -25,11 +25,11 @@
         "url": "https://b2b-technographics-prospector.onrender.com/api/v1/leads/discover",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{$json}}",
+        "jsonBody": "={{ { domains: $json.domains } }}",
         "options": {"timeout": 120000}
       },
       "id": "discover-api",
-      "name": "Descobrir CRM e pontuar",
+      "name": "Descobrir CRM e contato",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [700, 300],
@@ -39,19 +39,19 @@
     },
     {
       "parameters": {
-        "jsCode": "const MIN_SCORE = 70; const locations = {'santailha.com.br':'Florianópolis/SC','porter.com.br':'Florianópolis/SC','parmais.com.br':'Florianópolis/SC','suacirurgia.com.br':'Florianópolis/SC','superoticasaojose.com.br':'Joinville/SC','grupotopcar.com.br':'Florianópolis/SC','bmwtopcar.com.br':'Florianópolis/SC','bmwmotostopcar.com.br':'Florianópolis/SC','hithonda.com.br':'Florianópolis/SC','bajajedisa.com.br':'Florianópolis/SC'}; const leads = $input.all().flatMap(item => Array.isArray(item.json) ? item.json : [item.json]).filter(lead => lead && lead.id && locations[lead.domain] && Number(lead.lead_score || 0) >= MIN_SCORE && lead.status !== 'suppressed').sort((a, b) => Number(b.lead_score || 0) - Number(a.lead_score || 0)); if (!leads.length) return [{ json: { message: 'Nenhum lead de Santa Catarina atingiu 70 pontos nesta pesquisa.', count: 0, suggestion: 'Revise os resultados mornos ou adicione novos domínios catarinenses.' } }]; return leads.map((lead, index) => ({ json: { priority: index + 1, id: lead.id, domain: lead.domain, company: lead.company_name || lead.domain, location: locations[lead.domain], crm: lead.crm, score: lead.lead_score, temperature: lead.temperature, contact_name: lead.contact_name, contact_email: lead.contact_email, reasons: lead.score_reasons, evidence: lead.evidence, status: lead.status } }));"
+        "jsCode": "const MIN_SCORE=70; const leads=$input.all().flatMap(item=>Array.isArray(item.json)?item.json:[item.json]); const prospects=$('Definir empresas e sinais públicos').all().map(item=>item.json); const ranked=leads.map((lead,index)=>{const prospect=prospects[index]||{}; const technologyScore=Number(lead.lead_score||0); const painScore=Number(prospect.pain_score||0); const score=Math.max(technologyScore,painScore); let opportunity_type='pesquisa adicional'; if(lead.crm&&painScore>=MIN_SCORE) opportunity_type='otimização de processos e CRM'; else if(lead.crm) opportunity_type='otimização de CRM'; else if(painScore>=MIN_SCORE) opportunity_type='implantação de CRM e atendimento'; return {...lead,company:prospect.company||lead.company_name||lead.domain,location:prospect.location,technology_score:technologyScore,pain_score:painScore,score,temperature:score>=70?'hot':score>=45?'warm':'cold',opportunity_type,pain_summary:prospect.pain_summary||null,pain_source:prospect.pain_source||null};}).filter(lead=>lead.id&&lead.score>=MIN_SCORE&&lead.status!=='suppressed'); const unique=new Map(); for(const lead of ranked){const key=lead.company.toLowerCase(); const current=unique.get(key); if(!current||lead.score>current.score||(!current.crm&&lead.crm)||(!current.contact_email&&lead.contact_email)) unique.set(key,lead);} const sorted=[...unique.values()].sort((a,b)=>b.score-a.score); if(!sorted.length)return[{json:{message:'Nenhuma oportunidade atingiu 70 pontos.',count:0,suggestion:'Adicione empresas ou novos sinais públicos no primeiro nó.'}}]; return sorted.map((lead,index)=>({json:{priority:index+1,id:lead.id,company:lead.company,domain:lead.domain,location:lead.location,opportunity_type:lead.opportunity_type,crm:lead.crm||'não detectado publicamente',score:lead.score,technology_score:lead.technology_score,pain_score:lead.pain_score,temperature:lead.temperature,contact_name:lead.contact_name,contact_email:lead.contact_email,technology_reasons:lead.score_reasons,pain_summary:lead.pain_summary,pain_source:lead.pain_source,evidence:lead.evidence,status:lead.status}}));"
       },
       "id": "rank-hot",
-      "name": "Mostrar somente leads quentes",
+      "name": "Mostrar oportunidades quentes",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [950, 300]
     }
   ],
   "connections": {
-    "Executar pesquisa": {"main": [[{"node": "Definir domínios para pesquisar", "type": "main", "index": 0}]]},
-    "Definir domínios para pesquisar": {"main": [[{"node": "Descobrir CRM e pontuar", "type": "main", "index": 0}]]},
-    "Descobrir CRM e pontuar": {"main": [[{"node": "Mostrar somente leads quentes", "type": "main", "index": 0}]]}
+    "Executar pesquisa": {"main": [[{"node": "Definir empresas e sinais públicos", "type": "main", "index": 0}]]},
+    "Definir empresas e sinais públicos": {"main": [[{"node": "Descobrir CRM e contato", "type": "main", "index": 0}]]},
+    "Descobrir CRM e contato": {"main": [[{"node": "Mostrar oportunidades quentes", "type": "main", "index": 0}]]}
   },
   "pinData": {},
   "settings": {"executionOrder": "v1"},

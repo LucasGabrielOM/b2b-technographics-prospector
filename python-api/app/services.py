@@ -21,7 +21,7 @@ TECH_SIGNATURES = {
 
 CONTACT_TERMS = ("contato", "contact", "orcamento", "orçamento", "fale", "sobre", "about", "atendimento")
 EMAIL_RE = re.compile(r"[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}", re.I)
-IGNORED_EMAIL_PARTS = ("example.", "sentry", "wixpress", "cloudflare", "noreply", "no-reply")
+IGNORED_EMAIL_PARTS = ("example.", "email@email", "teste@teste", "sentry", "wixpress", "cloudflare", "noreply", "no-reply")
 FREE_EMAIL_DOMAINS = {
     "gmail.com", "hotmail.com", "hotmail.com.br", "outlook.com", "live.com",
     "yahoo.com", "yahoo.com.br", "icloud.com", "bol.com.br", "uol.com.br",

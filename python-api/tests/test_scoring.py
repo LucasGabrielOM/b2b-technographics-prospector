@@ -33,7 +33,7 @@ def test_no_crm_is_cold_even_with_contact():
 
 
 def test_public_email_prefers_business_domain_and_ignores_free_mail():
-    content = "marcio.fotog@gmail.com contato@empresa.com.br b2b@empresa.com.br"
+    content = "marcio.fotog@gmail.com email@email.com contato@empresa.com.br b2b@empresa.com.br"
 
     assert _public_emails(content, "empresa.com.br") == [
         "b2b@empresa.com.br",
