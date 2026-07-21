@@ -58,7 +58,7 @@ O detector visita a página inicial e até quatro páginas públicas relacionada
 - e-mail profissional público: 20 pontos;
 - empresa e setor identificados: 5 pontos cada.
 
-Temperaturas: `hot` a partir de 70, `warm` a partir de 45 e `cold` abaixo disso. Consulte `GET /api/v1/leads/hot` ou importe o workflow **B2B 03 - Leads quentes priorizados**. O score prioriza revisão; ele não autoriza envio automático.
+Temperaturas: `hot` a partir de 70, `warm` a partir de 45 e `cold` abaixo disso. O workflow **B2B 03 - Descobrir e priorizar leads quentes** reúne todo o teste inicial: recebe os domínios, executa a descoberta, calcula o score e mostra somente os leads quentes. Para testar no n8n, basta importar esse único workflow. O score prioriza revisão; ele não autoriza envio automático.
 
 ## Integrações e extensões
 
