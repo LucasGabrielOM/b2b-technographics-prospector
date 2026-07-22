@@ -29,6 +29,7 @@ class ProspectRequest(BaseModel):
     target_contacts: int = Field(default=50, ge=1, le=100)
     min_score: int = Field(default=0, ge=0, le=100)
     include_complaints: bool = True
+    only_new: bool = True
 
 
 class LeadPatch(BaseModel):

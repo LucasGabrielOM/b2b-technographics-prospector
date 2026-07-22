@@ -17,6 +17,8 @@ Para testar gratuitamente, importe `n8n/workflows/03_hot_leads.json` e execute *
 
 O sistema não precisa de OpenAI para descobrir leads. O disparo automático, porém, exige uma conta real de WhatsApp Business Cloud API/provedor ou SMTP. Sem essa credencial, o último nó deixa a mensagem e o link prontos, mas não finge que enviou.
 
+Por padrão, `POST /api/v1/prospect/run` usa `only_new=true`: consulta um conjunto até cinco vezes maior que o lote solicitado, compara os domínios com o PostgreSQL e devolve apenas empresas ainda não cadastradas. A restrição única da coluna `domain` também impede duplicação física no banco. Use `only_new=false` somente para reprocessar ou atualizar leads existentes.
+
 MVP de prospecção B2B com **n8n + Python**, detecção multipágina de CRM por sinais públicos, enriquecimento opcional, score transparente de oportunidade, geração de abordagem e aprovação humana obrigatória antes do envio.
 
 ## Arquitetura
