@@ -2,7 +2,7 @@ def test_health(client):
     assert client.get("/health").json() == {"status": "ok"}
     dashboard = client.get("/dashboard")
     assert dashboard.status_code == 200
-    assert "Transforme dados em novas vendas" in dashboard.text
+    assert "Seu próximo cliente pode estar aqui" in dashboard.text
 
 
 def test_manual_lead_pipeline_requires_email_and_approval(client, monkeypatch):
