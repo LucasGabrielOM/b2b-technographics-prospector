@@ -3,38 +3,76 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Painel de Leads · B2B Prospector</title>
+  <meta name="theme-color" content="#0b172a">
+  <title>ProspectFlow · Gestão de Leads B2B</title>
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-  <header>
-    <div><span class="eyebrow">B2B PROSPECTOR</span><h1>Central de oportunidades</h1><p>Leads descobertos pelo n8n, sincronizados com o banco de dados.</p></div>
-    <button id="refresh" class="secondary">↻ Atualizar</button>
-  </header>
-  <main>
-    <section id="stats" class="stats"></section>
-    <section class="toolbar">
-      <input id="search" type="search" placeholder="Buscar empresa, domínio ou CRM">
-      <select id="temperature"><option value="">Todas temperaturas</option><option value="hot">Quentes</option><option value="warm">Mornos</option><option value="cold">Frios</option></select>
-      <select id="status"><option value="">Todos status</option><option value="discovered">Novo</option><option value="enriched">Enriquecido</option><option value="drafted">Rascunho</option><option value="approved">Aprovado</option><option value="sent">Enviado</option><option value="suppressed">Suprimido</option></select>
-      <label class="check"><input id="contactOnly" type="checkbox"> Somente com contato</label>
-    </section>
-    <div id="notice" class="notice hidden"></div>
-    <section id="leads" class="lead-grid" aria-live="polite"></section>
-    <div id="empty" class="empty hidden">Nenhum lead encontrado com esses filtros.</div>
-  </main>
+  <aside class="sidebar">
+    <a class="brand" href="#overview"><span class="brand-mark">P</span><span><strong>ProspectFlow</strong><small>Inteligência comercial</small></span></a>
+    <nav aria-label="Navegação principal">
+      <a class="nav-item active" href="#overview"><span>▦</span> Visão geral</a>
+      <a class="nav-item" href="#pipeline"><span>◎</span> Pipeline de leads</a>
+      <a class="nav-item" href="/docs" target="_blank"><span>⌘</span> Integrações</a>
+    </nav>
+    <div class="sidebar-foot"><span class="live-dot"></span><div><strong>Sistema online</strong><small>n8n + PostgreSQL</small></div></div>
+  </aside>
+
+  <div class="app-shell">
+    <header class="topbar">
+      <div><button id="menuToggle" class="mobile-menu" aria-label="Abrir menu">☰</button><span class="breadcrumb">Workspace / Prospecção B2B</span></div>
+      <div class="top-actions"><span id="lastUpdate" class="last-update"></span><button id="refresh" class="button ghost">↻ Atualizar dados</button><a class="button primary" href="#pipeline">Ver oportunidades</a></div>
+    </header>
+
+    <main>
+      <section id="overview" class="hero">
+        <div><span class="kicker">PAINEL COMERCIAL</span><h1>Seu pipeline, claro e acionável.</h1><p>Acompanhe oportunidades encontradas automaticamente, priorize os melhores contatos e registre cada abordagem.</p></div>
+        <div class="sync-pill"><span class="live-dot"></span><div><small>Sincronização</small><strong>Atualização automática a cada 60s</strong></div></div>
+      </section>
+
+      <section id="stats" class="stats" aria-label="Indicadores principais"></section>
+
+      <section class="insights">
+        <article class="panel funnel-panel"><div class="panel-head"><div><span class="kicker">CONVERSÃO</span><h2>Funil de prospecção</h2></div><span class="panel-note">Base atual</span></div><div id="funnel" class="funnel"></div></article>
+        <article class="panel channels-panel"><div class="panel-head"><div><span class="kicker">COBERTURA</span><h2>Canais disponíveis</h2></div></div><div id="channels" class="channels"></div></article>
+      </section>
+
+      <section id="pipeline" class="panel lead-panel">
+        <div class="section-head"><div><span class="kicker">OPORTUNIDADES</span><h2>Pipeline de leads</h2><p id="resultSummary">Carregando empresas...</p></div><button id="exportCsv" class="button ghost">⇩ Exportar CSV</button></div>
+
+        <form id="filters" class="filters">
+          <label class="search-field"><span>⌕</span><input id="search" type="search" placeholder="Empresa, domínio, CRM ou cidade"></label>
+          <select id="temperature" aria-label="Temperatura"><option value="">Todas temperaturas</option><option value="hot">Quentes</option><option value="warm">Mornos</option><option value="cold">Frios</option></select>
+          <select id="status" aria-label="Status"><option value="">Todos status</option><option value="discovered">Novos</option><option value="enriched">Enriquecidos</option><option value="drafted">Rascunhos</option><option value="approved">Aprovados</option><option value="sent">Enviados</option><option value="suppressed">Suprimidos</option></select>
+          <label class="contact-check"><input id="contactOnly" type="checkbox"><span>Somente com contato</span></label>
+          <button type="submit" class="button primary">Pesquisar</button>
+          <button type="button" id="clearFilters" class="button ghost">Limpar</button>
+        </form>
+
+        <div id="notice" class="notice hidden"></div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Empresa</th><th>Prioridade</th><th>CRM</th><th>Contato</th><th>Status</th><th class="actions-col">Ações</th></tr></thead>
+            <tbody id="leadRows"></tbody>
+          </table>
+          <div id="empty" class="empty hidden"><span>⌕</span><h3>Nenhum lead encontrado</h3><p>Ajuste os filtros ou execute uma nova prospecção no n8n.</p></div>
+        </div>
+        <footer class="pagination"><span id="pageInfo"></span><div><button id="prevPage" class="page-button">← Anterior</button><button id="nextPage" class="page-button">Próxima →</button></div></footer>
+      </section>
+    </main>
+  </div>
 
   <dialog id="editor">
     <form id="editForm">
-      <div class="dialog-head"><div><span class="eyebrow">EDITAR LEAD</span><h2 id="editTitle">Empresa</h2></div><button type="button" id="closeEditor" class="icon">×</button></div>
+      <div class="dialog-head"><div><span class="kicker">ATUALIZAR OPORTUNIDADE</span><h2 id="editTitle">Empresa</h2><p>As mudanças serão sincronizadas com o banco e o n8n.</p></div><button type="button" id="closeEditor" class="icon-button" aria-label="Fechar">×</button></div>
       <input type="hidden" id="leadId">
       <div class="form-grid">
         <label>Empresa<input id="companyName"></label><label>Setor<input id="sector"></label>
         <label>Nome do contato<input id="contactName"></label><label>Cargo<input id="contactRole"></label>
         <label>E-mail<input id="contactEmail" type="email"></label><label>WhatsApp<input id="contactWhatsapp"></label>
-        <label>Telefone<input id="contactPhone"></label><label class="wide">Observações<textarea id="notes" rows="4"></textarea></label>
+        <label>Telefone<input id="contactPhone"></label><label class="wide">Observações<textarea id="notes" rows="4" placeholder="Contexto, próximos passos, objeções..."></textarea></label>
       </div>
-      <div class="dialog-actions"><button type="button" id="cancelEdit" class="secondary">Cancelar</button><button type="submit">Salvar alterações</button></div>
+      <div class="dialog-actions"><button type="button" id="cancelEdit" class="button ghost">Cancelar</button><button type="submit" class="button primary">Salvar alterações</button></div>
     </form>
   </dialog>
   <script src="/static/app.js"></script>
