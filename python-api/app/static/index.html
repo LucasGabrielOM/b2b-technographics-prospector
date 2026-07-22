@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Painel de Leads · B2B Prospector</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header>
+    <div><span class="eyebrow">B2B PROSPECTOR</span><h1>Central de oportunidades</h1><p>Leads descobertos pelo n8n, sincronizados com o banco de dados.</p></div>
+    <button id="refresh" class="secondary">↻ Atualizar</button>
+  </header>
+  <main>
+    <section id="stats" class="stats"></section>
+    <section class="toolbar">
+      <input id="search" type="search" placeholder="Buscar empresa, domínio ou CRM">
+      <select id="temperature"><option value="">Todas temperaturas</option><option value="hot">Quentes</option><option value="warm">Mornos</option><option value="cold">Frios</option></select>
+      <select id="status"><option value="">Todos status</option><option value="discovered">Novo</option><option value="enriched">Enriquecido</option><option value="drafted">Rascunho</option><option value="approved">Aprovado</option><option value="sent">Enviado</option><option value="suppressed">Suprimido</option></select>
+      <label class="check"><input id="contactOnly" type="checkbox"> Somente com contato</label>
+    </section>
+    <div id="notice" class="notice hidden"></div>
+    <section id="leads" class="lead-grid" aria-live="polite"></section>
+    <div id="empty" class="empty hidden">Nenhum lead encontrado com esses filtros.</div>
+  </main>
+
+  <dialog id="editor">
+    <form id="editForm">
+      <div class="dialog-head"><div><span class="eyebrow">EDITAR LEAD</span><h2 id="editTitle">Empresa</h2></div><button type="button" id="closeEditor" class="icon">×</button></div>
+      <input type="hidden" id="leadId">
+      <div class="form-grid">
+        <label>Empresa<input id="companyName"></label><label>Setor<input id="sector"></label>
+        <label>Nome do contato<input id="contactName"></label><label>Cargo<input id="contactRole"></label>
+        <label>E-mail<input id="contactEmail" type="email"></label><label>WhatsApp<input id="contactWhatsapp"></label>
+        <label>Telefone<input id="contactPhone"></label><label class="wide">Observações<textarea id="notes" rows="4"></textarea></label>
+      </div>
+      <div class="dialog-actions"><button type="button" id="cancelEdit" class="secondary">Cancelar</button><button type="submit">Salvar alterações</button></div>
+    </form>
+  </dialog>
+  <script src="/static/app.js"></script>
+</body>
+</html>

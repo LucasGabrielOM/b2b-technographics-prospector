@@ -1,6 +1,11 @@
 import asyncio
+from datetime import datetime, timezone
+from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException, Query
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+from sqlalchemy import or_
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -8,12 +13,14 @@ from .config import Settings, get_settings
 from .database import Base, engine, ensure_lead_contact_columns, get_db
 from .models import Lead, LeadStatus
 from .prospecting import discover_businesses, map_complaints
-from .schemas import DiscoveryRequest, GenerateRequest, LeadOut, LeadPatch, ProspectRequest, SuppressRequest
+from .schemas import DiscoveryRequest, GenerateRequest, LeadOut, LeadPatch, MarkContactedRequest, ProspectRequest, SuppressRequest
 from .services import dispatch, enrich_with_hunter, generate_draft, is_business_email, refresh_lead_score, scan_domain
 
 Base.metadata.create_all(bind=engine)
 ensure_lead_contact_columns()
 app = FastAPI(title="B2B Technographics Prospector", version="0.1.0")
+STATIC_DIR = Path(__file__).parent / "static"
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
 def find_lead(lead_id: int, db: Session) -> Lead:
@@ -26,6 +33,11 @@ def find_lead(lead_id: int, db: Session) -> Lead:
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+@app.get("/dashboard", include_in_schema=False)
+def dashboard():
+    return FileResponse(STATIC_DIR / "index.html")
 
 
 @app.post("/api/v1/leads/discover", response_model=list[LeadOut])
@@ -124,11 +136,22 @@ async def run_prospecting(
 
 
 @app.get("/api/v1/leads", response_model=list[LeadOut])
-def list_leads(status: str | None = Query(default=None), db: Session = Depends(get_db)):
+def list_leads(
+    status: str | None = Query(default=None),
+    temperature: str | None = Query(default=None),
+    q: str | None = Query(default=None, max_length=100),
+    limit: int = Query(default=500, ge=1, le=1000),
+    db: Session = Depends(get_db),
+):
     query = select(Lead).order_by(Lead.id.desc())
     if status:
         query = query.where(Lead.status == status)
-    return list(db.scalars(query))
+    if temperature:
+        query = query.where(Lead.temperature == temperature)
+    if q:
+        term = f"%{q.strip()}%"
+        query = query.where(or_(Lead.company_name.ilike(term), Lead.domain.ilike(term), Lead.crm.ilike(term)))
+    return list(db.scalars(query.limit(limit)))
 
 
 @app.get("/api/v1/leads/hot", response_model=list[LeadOut])
@@ -157,6 +180,28 @@ def patch_lead(lead_id: int, payload: LeadPatch, db: Session = Depends(get_db)):
     for key, value in payload.model_dump(exclude_unset=True).items():
         setattr(lead, key, str(value) if value is not None else None)
     refresh_lead_score(lead)
+    db.commit()
+    return lead
+
+
+@app.post("/api/v1/leads/{lead_id}/mark-contacted", response_model=LeadOut)
+def mark_contacted(lead_id: int, payload: MarkContactedRequest, db: Session = Depends(get_db)):
+    lead = find_lead(lead_id, db)
+    if lead.status == LeadStatus.SUPPRESSED.value:
+        raise HTTPException(status_code=409, detail="Lead está na lista de supressão")
+    lead.status = LeadStatus.SENT.value
+    lead.contact_channel = payload.channel
+    lead.contacted_at = datetime.now(timezone.utc)
+    db.commit()
+    return lead
+
+
+@app.post("/api/v1/leads/{lead_id}/reopen", response_model=LeadOut)
+def reopen_lead(lead_id: int, db: Session = Depends(get_db)):
+    lead = find_lead(lead_id, db)
+    lead.status = LeadStatus.DISCOVERED.value
+    lead.contact_channel = None
+    lead.contacted_at = None
     db.commit()
     return lead
 
@@ -208,6 +253,8 @@ async def send(lead_id: int, db: Session = Depends(get_db), settings: Settings =
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Falha no provedor de outreach: {exc}") from exc
     lead.status = LeadStatus.SENT.value
+    lead.contact_channel = "email"
+    lead.contacted_at = datetime.now(timezone.utc)
     db.commit()
     return result
 
