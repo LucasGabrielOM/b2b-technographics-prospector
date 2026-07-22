@@ -185,6 +185,9 @@ function exportCsv() {
 }
 
 el('filters').addEventListener('submit', (event) => { event.preventDefault(); applyFilters(); });
+el('search').addEventListener('input', () => applyFilters());
+el('temperature').addEventListener('change', () => applyFilters());
+el('status').addEventListener('change', () => applyFilters());
 el('clearFilters').addEventListener('click', () => { el('filters').reset(); state.quick = 'all'; document.querySelectorAll('.quick').forEach((button) => button.classList.toggle('active', button.dataset.quick === 'all')); applyFilters(); });
 document.querySelectorAll('.quick').forEach((button) => button.addEventListener('click', () => { state.quick = button.dataset.quick; document.querySelectorAll('.quick').forEach((item) => item.classList.toggle('active', item === button)); applyFilters(); }));
 el('prevPage').addEventListener('click', () => { if (state.page > 1) { state.page -= 1; renderTable(); } });
