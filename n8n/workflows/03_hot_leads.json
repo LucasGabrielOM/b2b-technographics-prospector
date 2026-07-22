@@ -19,7 +19,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const cities=['Florianópolis','São José','Palhoça','Biguaçu','Tijucas']; return cities.map((city,batch)=>({json:{batch:batch+1,city,state:'Santa Catarina',segments:['imobiliária','concessionária','loja','clínica','distribuidora'],limit:30,target_contacts:12,min_score:0,include_complaints:true}}));"
+        "jsCode": "const cities=['Florianópolis','São José','Palhoça','Biguaçu','Tijucas']; return cities.map((city,batch)=>({json:{batch:batch+1,city,state:'Santa Catarina',segments:['imobiliária','concessionária','loja','clínica','distribuidora'],limit:30,target_contacts:12,min_score:0,include_complaints:true,only_new:true}}));"
       },
       "id": "search-criteria",
       "name": "Região e público-alvo",

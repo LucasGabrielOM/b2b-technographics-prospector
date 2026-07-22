@@ -71,11 +71,14 @@ def test_autonomous_prospecting_discovers_domain_contact_and_pain(client, monkey
     assert lead["contact_email"] == "contato@empresa.com.br"
     assert lead["contact_whatsapp"] == "+5548999999999"
 
+    repeated = client.post("/api/v1/prospect/run", json={"limit": 10, "min_score": 0}).json()
+    assert repeated == []
+
     async def unavailable_discovery(city, state, segments, limit, settings):
         return []
 
     monkeypatch.setattr("app.main.discover_businesses", unavailable_discovery)
-    cached = client.post("/api/v1/prospect/run", json={"limit": 10, "min_score": 45}).json()
+    cached = client.post("/api/v1/prospect/run", json={"limit": 10, "min_score": 45, "only_new": False}).json()
     assert cached[0]["domain"] == "empresa.com.br"
     assert cached[0]["pain_score"] == 75
 

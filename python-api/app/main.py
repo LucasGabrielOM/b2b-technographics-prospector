@@ -67,11 +67,17 @@ async def run_prospecting(
     settings: Settings = Depends(get_settings),
 ):
     """Descobre empresas e executa todo o enriquecimento sem receber domínios manualmente."""
+    candidate_pool = min(500, max(100, payload.limit * 5))
     try:
-        prospects = await discover_businesses(payload.city, payload.state, payload.segments, payload.limit, settings)
+        prospects = await discover_businesses(payload.city, payload.state, payload.segments, candidate_pool, settings)
     except Exception as exc:
         prospects = []
-    if not prospects:
+    if payload.only_new:
+        existing_domains = set(db.scalars(select(Lead.domain)))
+        prospects = [item for item in prospects if item["domain"] not in existing_domains][:payload.limit]
+    else:
+        prospects = prospects[:payload.limit]
+    if not prospects and not payload.only_new:
         cached = list(db.scalars(
             select(Lead)
             .where(Lead.location.ilike(f"{payload.city}/%"), Lead.status != LeadStatus.SUPPRESSED.value)
