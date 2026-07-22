@@ -48,5 +48,8 @@ class Lead(Base):
     pain_score: Mapped[int] = mapped_column(Integer, default=0, index=True)
     pain_summary: Mapped[str | None] = mapped_column(Text)
     pain_source: Mapped[str | None] = mapped_column(String(1000))
+    notes: Mapped[str | None] = mapped_column(Text)
+    contact_channel: Mapped[str | None] = mapped_column(String(40))
+    contacted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)

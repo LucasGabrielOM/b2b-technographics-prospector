@@ -33,6 +33,9 @@ def ensure_lead_contact_columns() -> None:
             "pain_score": "INTEGER DEFAULT 0",
             "pain_summary": "TEXT",
             "pain_source": "VARCHAR(1000)",
+            "notes": "TEXT",
+            "contact_channel": "VARCHAR(40)",
+            "contacted_at": "TIMESTAMP WITH TIME ZONE",
         }
         for name, sql_type in additions.items():
             if name not in existing:

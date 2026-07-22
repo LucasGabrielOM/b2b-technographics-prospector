@@ -1,5 +1,9 @@
 # B2B Technographics Prospector
 
+## Painel de leads
+
+Abra `/dashboard` na URL da API para visualizar todos os leads persistidos pelo n8n. O painel permite filtrar por temperatura e status, pesquisar, editar os contatos, abrir o site da empresa, preparar WhatsApp/e-mail e marcar ou reabrir leads enviados. Painel, API e n8n usam a mesma tabela PostgreSQL; as alterações são sincronizadas imediatamente.
+
 ## Prospecção automática completa
 
 O workflow **B2B 03 - Prospecção automática completa** não recebe uma lista de domínios. Ele recebe apenas cidade, estado, segmentos e limite, descobre empresas com site na região, visita os sites, encontra CRM e canais de contato, pesquisa sinais públicos de reclamações, pontua os leads e prepara mensagens de WhatsApp ou e-mail.

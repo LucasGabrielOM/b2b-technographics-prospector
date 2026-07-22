@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 
@@ -38,6 +40,11 @@ class LeadPatch(BaseModel):
     contact_email: EmailStr | None = None
     contact_phone: str | None = Field(default=None, max_length=40)
     contact_whatsapp: str | None = Field(default=None, max_length=40)
+    notes: str | None = Field(default=None, max_length=2000)
+
+
+class MarkContactedRequest(BaseModel):
+    channel: str = Field(default="manual", pattern="^(whatsapp|email|phone|manual)$")
 
 
 class GenerateRequest(BaseModel):
@@ -77,3 +84,6 @@ class LeadOut(BaseModel):
     pain_score: int
     pain_summary: str | None
     pain_source: str | None
+    notes: str | None
+    contact_channel: str | None
+    contacted_at: datetime | None

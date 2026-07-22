@@ -1,5 +1,8 @@
 def test_health(client):
     assert client.get("/health").json() == {"status": "ok"}
+    dashboard = client.get("/dashboard")
+    assert dashboard.status_code == 200
+    assert "Central de oportunidades" in dashboard.text
 
 
 def test_manual_lead_pipeline_requires_email_and_approval(client, monkeypatch):
@@ -75,3 +78,12 @@ def test_autonomous_prospecting_discovers_domain_contact_and_pain(client, monkey
     cached = client.post("/api/v1/prospect/run", json={"limit": 10, "min_score": 45}).json()
     assert cached[0]["domain"] == "empresa.com.br"
     assert cached[0]["pain_score"] == 75
+
+    marked = client.post(f"/api/v1/leads/{lead['id']}/mark-contacted", json={"channel": "whatsapp"})
+    assert marked.status_code == 200
+    assert marked.json()["status"] == "sent"
+    assert marked.json()["contact_channel"] == "whatsapp"
+    assert marked.json()["contacted_at"] is not None
+    reopened = client.post(f"/api/v1/leads/{lead['id']}/reopen").json()
+    assert reopened["status"] == "discovered"
+    assert reopened["contacted_at"] is None
