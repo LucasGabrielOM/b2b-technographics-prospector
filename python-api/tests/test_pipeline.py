@@ -1,5 +1,8 @@
 def test_health(client):
     assert client.get("/health").json() == {"status": "ok"}
+    assert client.get("/login").status_code == 200
+    login = client.post("/api/v1/auth/login", json={"username": "admin", "password": "demo1234"})
+    assert login.status_code == 200
     dashboard = client.get("/dashboard")
     assert dashboard.status_code == 200
     assert "Seu próximo cliente pode estar aqui" in dashboard.text
@@ -53,7 +56,7 @@ def test_autonomous_prospecting_discovers_domain_contact_and_pain(client, monkey
         }]
 
     async def fake_complaints(prospects, settings, enabled):
-        return [{**prospects[0], "pain_score": 75, "pain_summary": "Demora e falta de retorno.", "pain_source": "https://www.reclameaqui.com.br/empresa/teste"}]
+        return [{**prospects[0], "pain_score": 75, "pain_summary": "Demora e falta de retorno.", "pain_source": "https://www.reclameaqui.com.br/empresa/teste", "opportunity_type": "recuperacao de atendimento"}]
 
     async def fake_scan(domain, settings):
         return {"crm": None, "confidence": 0, "evidence": [], "public_emails": ["contato@empresa.com.br"], "public_phones": [], "public_whatsapps": ["+5548999999999"], "pages_scanned": 2}
@@ -66,8 +69,9 @@ def test_autonomous_prospecting_discovers_domain_contact_and_pain(client, monkey
     lead = response.json()[0]
     assert lead["domain"] == "empresa.com.br"
     assert lead["company_name"] == "Empresa Automática"
+    assert lead["opportunity_type"] == "recuperacao de atendimento"
     assert lead["pain_score"] == 75
-    assert lead["lead_score"] == 75
+    assert lead["lead_score"] == 91
     assert lead["contact_email"] == "contato@empresa.com.br"
     assert lead["contact_whatsapp"] == "+5548999999999"
 

@@ -17,7 +17,7 @@ function safeUrl(value, fallback = '#') {
 }
 
 async function api(path, options = {}) {
-  const response = await fetch(path, { ...options, headers: { 'Content-Type': 'application/json', ...(options.headers || {}) } });
+  const response = await fetch(path, { credentials: 'same-origin', ...options, headers: { 'Content-Type': 'application/json', ...(options.headers || {}) } });
   if (!response.ok) {
     let message = `Erro ${response.status}`;
     try { const body = await response.json(); message = body.detail || message; } catch (_) { /* resposta sem JSON */ }
@@ -26,6 +26,14 @@ async function api(path, options = {}) {
   return response.json();
 }
 
+async function ensurePortalSession() {
+  try {
+    await api('/api/v1/auth/me', { method: 'GET' });
+  } catch (_) {
+    window.location.replace('/login?next=/dashboard');
+    throw new Error('redirecting');
+  }
+}
 function notify(message, error = false) {
   byId('notice').textContent = message;
   byId('notice').className = `notice${error ? ' error' : ''}`;
@@ -89,7 +97,7 @@ function applyFilters(resetPage = true) {
   const temperature = byId('temperature').value;
   const status = byId('status').value;
   state.filtered = state.leads.filter((lead) => {
-    const searchable = [leadName(lead), lead.domain, lead.crm, lead.location, lead.sector].join(' ').toLowerCase();
+    const searchable = [leadName(lead), lead.domain, lead.crm, lead.location, lead.sector, lead.opportunity_type].join(' ').toLowerCase();
     const quickMatch = state.quick === 'all' || (state.quick === 'hot' && lead.temperature === 'hot') || (state.quick === 'contact' && hasContact(lead)) || (state.quick === 'pending' && lead.status !== 'sent');
     return (!query || searchable.includes(query)) && (!temperature || lead.temperature === temperature) && (!status || lead.status === status) && quickMatch;
   }).sort((a, b) => leadScore(b) - leadScore(a));
@@ -102,10 +110,11 @@ function leadRow(lead) {
   const links = contactLinks(lead);
   const contact = lead.contact_name || lead.contact_whatsapp || lead.contact_phone || lead.contact_email || 'Não localizado';
   const contactSub = lead.contact_name ? (lead.contact_role || lead.contact_email || '') : (lead.contact_email || '');
+  const opportunity = lead.opportunity_type || 'Oportunidade em aberto';
   return `<tr>
     <td><div class="company-cell"><span class="company-avatar">${escapeHtml(name.charAt(0).toUpperCase())}</span><div><strong title="${escapeHtml(name)}">${escapeHtml(name)}</strong><a href="${links.site}" target="_blank" rel="noopener">${escapeHtml(lead.domain)}</a></div></div></td>
     <td><div class="potential"><span class="score">${leadScore(lead)}</span><span class="temperature ${escapeHtml(lead.temperature || 'cold')}">${escapeHtml(temperatureLabels[lead.temperature] || 'Sem nota')}</span></div></td>
-    <td><div class="technology"><strong>${escapeHtml(lead.crm || 'Não detectado')}</strong><small>${escapeHtml(lead.location || lead.sector || 'Local não informado')}</small></div></td>
+    <td><div class="technology"><strong>${escapeHtml(lead.crm || 'Não detectado')}</strong><small>${escapeHtml(opportunity)} · ${escapeHtml(lead.location || lead.sector || 'Local não informado')}</small></div></td>
     <td><div class="contact-cell"><strong>${escapeHtml(contact)}</strong><small>${escapeHtml(contactSub)}</small></div></td>
     <td><span class="status ${escapeHtml(lead.status || 'discovered')}">${escapeHtml(statusLabels[lead.status] || lead.status || 'Novo')}</span></td>
     <td><div class="row-actions">${links.whatsapp ? `<a class="action contact" href="${links.whatsapp}" target="_blank" rel="noopener" data-contact="whatsapp" data-id="${lead.id}">WhatsApp</a>` : links.email ? `<a class="action contact" href="${links.email}" data-contact="email" data-id="${lead.id}">E-mail</a>` : `<a class="action" href="${links.site}" target="_blank" rel="noopener">Site</a>`}<button type="button" class="action primary" data-details="${lead.id}">Ver lead</button><button type="button" class="more-button" data-edit="${lead.id}" aria-label="Editar ${escapeHtml(name)}">•••</button></div></td>
@@ -135,7 +144,7 @@ function openDrawer(id) {
   byId('drawerDomain').textContent = lead.domain;
   byId('drawerDomain').href = links.site;
   const reasons = Array.isArray(lead.score_reasons) ? lead.score_reasons : [];
-  byId('drawerContent').innerHTML = `<div class="drawer-score"><div class="drawer-pill"><span>Potencial</span><strong>${leadScore(lead)}/100</strong></div><div class="drawer-pill"><span>Temperatura</span><strong>${escapeHtml(temperatureLabels[lead.temperature] || 'Sem nota')}</strong></div><div class="drawer-pill"><span>Status</span><strong>${escapeHtml(statusLabels[lead.status] || lead.status || 'Novo')}</strong></div></div>
+  byId('drawerContent').innerHTML = `<div class="drawer-score"><div class="drawer-pill"><span>Potencial</span><strong>${leadScore(lead)}/100</strong></div><div class="drawer-pill"><span>Temperatura</span><strong>${escapeHtml(temperatureLabels[lead.temperature] || 'Sem nota')}</strong></div><div class="drawer-pill"><span>Status</span><strong>${escapeHtml(statusLabels[lead.status] || lead.status || 'Novo')}</strong></div><div class="drawer-pill"><span>Tipo</span><strong>${escapeHtml(lead.opportunity_type || 'Consultivo')}</strong></div></div>
     <section class="detail-section"><h3>Dados da empresa</h3><div class="detail-grid"><div class="detail-item"><span>Setor</span><strong>${escapeHtml(lead.sector || 'Não informado')}</strong></div><div class="detail-item"><span>Localização</span><strong>${escapeHtml(lead.location || 'Não informada')}</strong></div><div class="detail-item"><span>CRM detectado</span><strong>${escapeHtml(lead.crm || 'Não detectado')}</strong></div><div class="detail-item"><span>Confiança</span><strong>${Math.round(Number(lead.confidence || 0) * 100)}%</strong></div></div></section>
     <section class="detail-section"><h3>Contato</h3><div class="detail-grid"><div class="detail-item"><span>Responsável</span><strong>${escapeHtml(lead.contact_name || 'Não localizado')}</strong></div><div class="detail-item"><span>Cargo</span><strong>${escapeHtml(lead.contact_role || 'Não informado')}</strong></div><div class="detail-item"><span>E-mail</span><strong>${escapeHtml(lead.contact_email || 'Não localizado')}</strong></div><div class="detail-item"><span>WhatsApp / telefone</span><strong>${escapeHtml(lead.contact_whatsapp || lead.contact_phone || 'Não localizado')}</strong></div></div></section>
     ${lead.pain_summary ? `<section class="detail-section"><h3>Oportunidade identificada</h3><p class="detail-copy">${escapeHtml(lead.pain_summary)}</p>${lead.pain_source ? `<p><a href="${safeUrl(lead.pain_source)}" target="_blank" rel="noopener">Ver fonte pública ↗</a></p>` : ''}</section>` : ''}
@@ -176,8 +185,8 @@ async function loadLeads() {
 function resetFilters() { byId('filters').reset(); state.quick = 'all'; document.querySelectorAll('.quick').forEach((button) => button.classList.toggle('active', button.dataset.quick === 'all')); applyFilters(); }
 
 function exportCsv() {
-  const columns = ['Empresa', 'Domínio', 'Local', 'CRM', 'Score', 'Temperatura', 'E-mail', 'WhatsApp', 'Telefone', 'Status'];
-  const rows = state.filtered.map((lead) => [leadName(lead), lead.domain, lead.location, lead.crm, leadScore(lead), lead.temperature, lead.contact_email, lead.contact_whatsapp, lead.contact_phone, lead.status]);
+  const columns = ['Empresa', 'Domínio', 'Local', 'Tipo', 'CRM', 'Score', 'Temperatura', 'E-mail', 'WhatsApp', 'Telefone', 'Status'];
+  const rows = state.filtered.map((lead) => [leadName(lead), lead.domain, lead.location, lead.opportunity_type, lead.crm, leadScore(lead), lead.temperature, lead.contact_email, lead.contact_whatsapp, lead.contact_phone, lead.status]);
   const csv = [columns, ...rows].map((row) => row.map((value) => `"${String(value ?? '').replace(/"/g, '""')}"`).join(',')).join('\n');
   const url = URL.createObjectURL(new Blob([`\ufeff${csv}`], { type: 'text/csv;charset=utf-8' })); const link = document.createElement('a'); link.href = url; link.download = `leads-${new Date().toISOString().slice(0, 10)}.csv`; link.click(); URL.revokeObjectURL(url);
 }
@@ -191,7 +200,6 @@ function handleActions(event) {
   if (target.dataset.reopen) reopenLead(target.dataset.reopen);
   if (target.dataset.contact) window.setTimeout(() => markContacted(target.dataset.id, target.dataset.contact), 600);
 }
-
 byId('todayLabel').textContent = new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' });
 byId('filters').addEventListener('submit', (event) => { event.preventDefault(); applyFilters(); });
 byId('search').addEventListener('input', () => applyFilters()); byId('temperature').addEventListener('change', () => applyFilters()); byId('status').addEventListener('change', () => applyFilters());
@@ -202,6 +210,17 @@ byId('refresh').addEventListener('click', loadLeads); byId('exportCsv').addEvent
 byId('closeDrawer').addEventListener('click', closeDrawer); byId('drawerBackdrop').addEventListener('click', closeDrawer); byId('menuToggle').addEventListener('click', () => byId('sidebar').classList.toggle('open')); document.querySelectorAll('.nav-link').forEach((link) => link.addEventListener('click', () => byId('sidebar').classList.remove('open')));
 byId('closeEditor').addEventListener('click', () => byId('editor').close()); byId('cancelEdit').addEventListener('click', () => byId('editor').close());
 byId('editForm').addEventListener('submit', async (event) => { event.preventDefault(); const id = byId('leadId').value; const payload = { company_name: byId('companyName').value || null, sector: byId('sector').value || null, contact_name: byId('contactName').value || null, contact_role: byId('contactRole').value || null, contact_email: byId('contactEmail').value || null, contact_whatsapp: byId('contactWhatsapp').value || null, contact_phone: byId('contactPhone').value || null, notes: byId('notes').value || null }; try { await api(`/api/v1/leads/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }); byId('editor').close(); await loadLeads(); notify('Lead atualizado com sucesso.'); } catch (error) { notify(error.message, true); } });
+const logoutButton = byId('logoutBtn');
+if (logoutButton) {
+  logoutButton.addEventListener('click', async () => {
+    try { await api('/api/v1/auth/logout', { method: 'POST' }); }
+    finally { window.location.replace('/login'); }
+  });
+}
 
-loadLeads();
-window.setInterval(loadLeads, 60000);
+ensurePortalSession()
+  .then(() => {
+    loadLeads();
+    window.setInterval(loadLeads, 60000);
+  })
+  .catch(() => {});

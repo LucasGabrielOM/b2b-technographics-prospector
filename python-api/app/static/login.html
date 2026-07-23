@@ -1,0 +1,396 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#08111f">
+  <title>LeadPilot Login</title>
+  <style>
+    :root{
+      --bg:#08111f;
+      --panel:rgba(10,18,34,.74);
+      --panel-strong:#0f1726;
+      --line:rgba(148,163,184,.16);
+      --text:#e5eefb;
+      --muted:#94a3b8;
+      --brand:#73e0b1;
+      --brand-2:#58a6ff;
+      --danger:#fb7185;
+      --shadow:0 30px 90px rgba(0,0,0,.42);
+    }
+    *{box-sizing:border-box}
+    html,body{min-height:100%;margin:0}
+    body{
+      font-family:Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+      color:var(--text);
+      background:
+        radial-gradient(circle at 18% 18%, rgba(88,166,255,.16), transparent 34%),
+        radial-gradient(circle at 82% 22%, rgba(115,224,177,.17), transparent 32%),
+        linear-gradient(135deg,#050b16 0%,#08111f 45%,#0b1628 100%);
+      overflow:hidden;
+    }
+    .grid{
+      min-height:100vh;
+      display:grid;
+      grid-template-columns:minmax(0,1.12fr) minmax(380px,420px);
+      gap:0;
+    }
+    .hero{
+      position:relative;
+      padding:48px 56px;
+      display:flex;
+      flex-direction:column;
+      justify-content:space-between;
+    }
+    .hero::before,
+    .hero::after{
+      content:"";
+      position:absolute;
+      border-radius:999px;
+      filter:blur(0);
+      pointer-events:none;
+    }
+    .hero::before{
+      width:340px;height:340px;right:10%;top:14%;
+      background:radial-gradient(circle, rgba(115,224,177,.14), transparent 62%);
+    }
+    .hero::after{
+      width:240px;height:240px;left:18%;bottom:8%;
+      background:radial-gradient(circle, rgba(88,166,255,.12), transparent 64%);
+    }
+    .brand{
+      display:flex;align-items:center;gap:12px;position:relative;z-index:1
+    }
+    .brand-mark{
+      width:46px;height:46px;border-radius:14px;
+      display:grid;place-items:center;
+      background:linear-gradient(145deg,#17304c,#0b1f35);
+      border:1px solid var(--line);
+      box-shadow:0 10px 30px rgba(0,0,0,.25);
+    }
+    .brand-mark i{display:block;width:22px;height:22px;border-radius:8px;border:2px solid var(--brand);position:relative}
+    .brand-mark i::before,.brand-mark i::after{
+      content:"";position:absolute;background:var(--brand);border-radius:999px
+    }
+    .brand-mark i::before{width:2px;height:12px;left:5px;top:3px}
+    .brand-mark i::after{width:12px;height:2px;left:3px;top:5px}
+    .brand strong{display:block;font-size:18px;letter-spacing:-.03em}
+    .brand small{display:block;font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--muted);margin-top:3px}
+    .headline{
+      position:relative;z-index:1;
+      max-width:720px;
+      margin-top:42px;
+    }
+    .eyebrow{
+      display:inline-flex;align-items:center;gap:8px;
+      font-size:12px;font-weight:800;letter-spacing:.18em;text-transform:uppercase;
+      color:var(--brand);
+    }
+    .eyebrow::before{content:"";width:10px;height:10px;border-radius:50%;background:var(--brand);box-shadow:0 0 0 6px rgba(115,224,177,.12)}
+    h1{
+      margin:18px 0 16px;
+      font-size:clamp(40px,6vw,72px);
+      line-height:.92;
+      letter-spacing:-.055em;
+      max-width:9ch;
+    }
+    .headline p{
+      margin:0;
+      max-width:56ch;
+      color:var(--muted);
+      font-size:17px;
+      line-height:1.65;
+    }
+    .signal-row{
+      position:relative;z-index:1;
+      display:grid;
+      grid-template-columns:repeat(3,minmax(0,1fr));
+      gap:14px;
+      margin-top:34px;
+      max-width:820px;
+    }
+    .signal{
+      background:rgba(13,20,33,.55);
+      border:1px solid var(--line);
+      border-radius:18px;
+      padding:18px 18px 16px;
+      box-shadow:var(--shadow);
+      backdrop-filter:blur(18px);
+      min-height:128px;
+    }
+    .signal span{
+      display:block;
+      font-size:11px;
+      letter-spacing:.14em;
+      color:var(--muted);
+      text-transform:uppercase;
+    }
+    .signal strong{
+      display:block;
+      font-size:30px;
+      letter-spacing:-.05em;
+      margin:12px 0 8px;
+    }
+    .signal p{
+      margin:0;
+      color:#cbd5e1;
+      font-size:13px;
+      line-height:1.5;
+    }
+    .footnote{
+      position:relative;z-index:1;
+      display:flex;gap:18px;flex-wrap:wrap;
+      margin-top:auto;
+      color:var(--muted);
+      font-size:12px;
+      line-height:1.5;
+    }
+    .footnote div{
+      padding:10px 14px;
+      border:1px solid var(--line);
+      border-radius:999px;
+      background:rgba(10,18,34,.45);
+      backdrop-filter:blur(16px);
+    }
+    .login{
+      display:flex;align-items:center;justify-content:center;
+      padding:28px;
+      background:rgba(2,7,19,.48);
+      border-left:1px solid rgba(148,163,184,.12);
+    }
+    .card{
+      width:min(100%,420px);
+      background:linear-gradient(180deg,rgba(16,24,40,.94),rgba(10,16,29,.94));
+      border:1px solid rgba(148,163,184,.14);
+      border-radius:24px;
+      padding:28px;
+      box-shadow:var(--shadow);
+    }
+    .card h2{
+      margin:18px 0 8px;
+      font-size:28px;
+      letter-spacing:-.045em;
+    }
+    .card p{
+      margin:0;
+      color:var(--muted);
+      line-height:1.6;
+      font-size:14px;
+    }
+    .form{
+      margin-top:24px;
+      display:grid;
+      gap:14px;
+    }
+    label{display:grid;gap:8px;font-size:12px;font-weight:700;color:#d8e5f4}
+    input{
+      width:100%;
+      border:1px solid rgba(148,163,184,.18);
+      background:rgba(6,11,20,.78);
+      color:var(--text);
+      border-radius:14px;
+      padding:15px 16px;
+      outline:none;
+      font:inherit;
+      transition:border-color .15s,box-shadow .15s,transform .15s;
+    }
+    input:focus{
+      border-color:rgba(115,224,177,.8);
+      box-shadow:0 0 0 4px rgba(115,224,177,.12);
+    }
+    .actions{
+      display:flex;
+      gap:12px;
+      align-items:center;
+      margin-top:8px;
+    }
+    .button{
+      border:0;
+      border-radius:14px;
+      min-height:48px;
+      padding:0 18px;
+      font-size:14px;
+      font-weight:800;
+      cursor:pointer;
+    }
+    .button-primary{
+      background:linear-gradient(135deg,var(--brand),#7ce3d0);
+      color:#08111f;
+      box-shadow:0 16px 34px rgba(115,224,177,.18);
+      flex:1;
+    }
+    .button-secondary{
+      background:transparent;
+      border:1px solid rgba(148,163,184,.18);
+      color:#d8e5f4;
+    }
+    .helper{
+      display:flex;justify-content:space-between;gap:16px;align-items:flex-start;
+      margin-top:18px;padding-top:18px;border-top:1px solid rgba(148,163,184,.12);
+      color:var(--muted);font-size:12px;line-height:1.6;
+    }
+    .badge{
+      display:inline-flex;align-items:center;gap:8px;
+      padding:8px 12px;
+      border-radius:999px;
+      background:rgba(115,224,177,.1);
+      border:1px solid rgba(115,224,177,.18);
+      color:#baf8dd;
+      font-size:11px;
+      font-weight:800;
+      letter-spacing:.08em;
+      text-transform:uppercase;
+    }
+    .error{
+      min-height:20px;
+      color:var(--danger);
+      font-size:13px;
+      margin-top:-4px;
+    }
+    @media (max-width: 980px){
+      body{overflow:auto}
+      .grid{grid-template-columns:1fr}
+      .hero{padding:36px 22px 28px}
+      .login{padding:0 18px 28px}
+      .signal-row{grid-template-columns:1fr}
+      .card{width:100%}
+    }
+  </style>
+</head>
+<body>
+  <div class="grid">
+    <section class="hero">
+      <div class="brand">
+        <div class="brand-mark"><i></i></div>
+        <div>
+          <strong>LeadPilot</strong>
+          <small>Revenue intelligence</small>
+        </div>
+      </div>
+
+      <div class="headline">
+        <span class="eyebrow">Portal comercial</span>
+        <h1>Acesso para demo e vendas consultivas.</h1>
+        <p>
+          Entre para revisar leads, disparar mensagens e demonstrar o SaaS com uma interface própria,
+          protegida por login e pronta para apresentação comercial.
+        </p>
+      </div>
+
+      <div class="signal-row">
+        <div class="signal">
+          <span>Tempo real</span>
+          <strong>+100</strong>
+          <p>Leads por execução com qualificação por sinal público e CRM detectado.</p>
+        </div>
+        <div class="signal">
+          <span>Conversão</span>
+          <strong>Hot / Warm</strong>
+          <p>Classificação transparente para você vender com argumentação clara.</p>
+        </div>
+        <div class="signal">
+          <span>Entrega</span>
+          <strong>n8n + API</strong>
+          <p>Pipeline automatizado, banco persistente e revisão manual antes do envio.</p>
+        </div>
+      </div>
+
+      <div class="footnote">
+        <div>Portal protegido por sessão</div>
+        <div>Dashboard com leads e contatos</div>
+        <div>Demo comercial para clientes</div>
+      </div>
+    </section>
+
+    <section class="login">
+      <div class="card">
+        <span class="badge">Acesso seguro</span>
+        <h2>Entrar no LeadPilot</h2>
+        <p>Use as credenciais do portal para abrir o dashboard e demonstrar a operação do sistema.</p>
+
+        <form id="loginForm" class="form">
+          <label>
+            Usuário
+            <input id="username" autocomplete="username" placeholder="admin" />
+          </label>
+          <label>
+            Senha
+            <input id="password" type="password" autocomplete="current-password" placeholder="demo1234" />
+          </label>
+          <div id="error" class="error"></div>
+          <div class="actions">
+            <button class="button button-primary" type="submit" id="submitBtn">Entrar</button>
+            <button class="button button-secondary" type="button" id="demoFill">Demo</button>
+          </div>
+        </form>
+
+        <div class="helper">
+          <div>
+            O portal usa cookie assinado e leva direto para <strong>/dashboard</strong> após o login.
+          </div>
+          <div>
+            Se você não definiu variáveis no Render, o padrão local é <strong>admin / demo1234</strong>.
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const byId = (id) => document.getElementById(id);
+    const params = new URLSearchParams(window.location.search);
+    const nextUrl = params.get('next') || '/dashboard';
+
+    async function api(path, options = {}) {
+      const response = await fetch(path, {
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
+        ...options,
+      });
+      if (!response.ok) {
+        let message = `Erro ${response.status}`;
+        try { const body = await response.json(); message = body.detail || message; } catch (_) {}
+        throw new Error(message);
+      }
+      return response;
+    }
+
+    async function checkSession() {
+      try {
+        await api('/api/v1/auth/me', { method: 'GET' });
+        window.location.replace(nextUrl);
+      } catch (_) {
+        /* permanece na tela de login */
+      }
+    }
+
+    byId('demoFill').addEventListener('click', () => {
+      byId('username').value = 'admin';
+      byId('password').value = 'demo1234';
+      byId('password').focus();
+    });
+
+    byId('loginForm').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      byId('error').textContent = '';
+      byId('submitBtn').disabled = true;
+      try {
+        await api('/api/v1/auth/login', {
+          method: 'POST',
+          body: JSON.stringify({
+            username: byId('username').value,
+            password: byId('password').value,
+          }),
+        });
+        window.location.replace(nextUrl);
+      } catch (error) {
+        byId('error').textContent = error.message;
+      } finally {
+        byId('submitBtn').disabled = false;
+      }
+    });
+
+    checkSession();
+  </script>
+</body>
+</html>

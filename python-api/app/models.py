@@ -28,6 +28,7 @@ class Lead(Base):
     domain: Mapped[str] = mapped_column(String(253), unique=True, index=True)
     sector: Mapped[str | None] = mapped_column(String(120))
     company_size: Mapped[str | None] = mapped_column(String(80))
+    opportunity_type: Mapped[str | None] = mapped_column(String(120))
     crm: Mapped[str | None] = mapped_column(String(80), index=True)
     confidence: Mapped[float] = mapped_column(Float, default=0)
     evidence: Mapped[list] = mapped_column(JSON, default=list)

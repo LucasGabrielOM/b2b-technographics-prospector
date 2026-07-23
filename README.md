@@ -4,16 +4,20 @@
 
 Abra `/dashboard` na URL da API para visualizar todos os leads persistidos pelo n8n. O painel permite filtrar por temperatura e status, pesquisar, editar os contatos, abrir o site da empresa, preparar WhatsApp/e-mail e marcar ou reabrir leads enviados. Painel, API e n8n usam a mesma tabela PostgreSQL; as alterações são sincronizadas imediatamente.
 
+O acesso ao painel é protegido por login. O portal demo fica em `/login` e redireciona para o dashboard após autenticação. No ambiente local, o padrão é `admin / demo1234`; no Render, ajuste `PORTAL_USERNAME`, `PORTAL_PASSWORD` e `PORTAL_SECRET`.
+
 ## Prospecção automática completa
 
-O workflow **B2B 03 - Prospecção automática completa** não recebe uma lista de domínios. Ele recebe apenas cidade, estado, segmentos e limite, descobre empresas com site na região, visita os sites, encontra CRM e canais de contato, pesquisa sinais públicos de reclamações, pontua os leads e prepara mensagens de WhatsApp ou e-mail.
+O workflow **B2B 03 - Prospecção automática completa** não recebe uma lista de domínios. Ele recebe apenas cidade, estado, segmentos e limite, descobre empresas com site na região, visita os sites, encontra CRM e canais de contato, pesquisa sinais públicos de reclamações e vagas, pontua os leads e prepara mensagens de WhatsApp ou e-mail.
 
 ```text
 Agenda diária -> região/segmentos -> descobrir empresas e sites -> analisar CRM e contato
               -> pesquisar reclamações -> pontuar -> preparar mensagem
 ```
 
-Para testar gratuitamente, importe `n8n/workflows/03_hot_leads.json` e execute **Testar agora**. O padrão pesquisa Florianópolis. A descoberta gratuita usa websites empresariais cadastrados no OpenStreetMap; a busca pública de reclamações usa um mecanismo gratuito como fallback. Para uso comercial estável, configure `SERPER_API_KEY` no Render, pois páginas de busca gratuitas podem bloquear automações.
+Para testar gratuitamente, importe `n8n/workflows/03_hot_leads.json` e execute **Testar agora**. O padrão agora pesquisa Santa Catarina inteira, com foco em cidades grandes do estado. A descoberta gratuita usa websites empresariais cadastrados no OpenStreetMap; a busca pública de reclamações e vagas usa um mecanismo gratuito como fallback. Para uso comercial estável, configure `SERPER_API_KEY` no Render, pois páginas de busca gratuitas podem bloquear automações.
+
+Se quiser aprofundar a qualificação com IA, configure `DEEPSEEK_API_KEY`. Nesse modo, o backend usa a DeepSeek como camada de leitura dos sinais públicos para resumir a oportunidade e reforçar o score.
 
 O sistema não precisa de OpenAI para descobrir leads. O disparo automático, porém, exige uma conta real de WhatsApp Business Cloud API/provedor ou SMTP. Sem essa credencial, o último nó deixa a mensagem e o link prontos, mas não finge que enviou.
 
@@ -48,7 +52,15 @@ docker compose exec n8n n8n import:workflow --separate --input=/workflows
 - API/Swagger: http://localhost:8000/docs
 - Saúde: http://localhost:8000/health
 
-Sem `OPENAI_API_KEY`, os rascunhos usam um gerador determinístico para permitir o teste completo. Sem `HUNTER_API_KEY`, o contato pode ser preenchido manualmente pela API. O envio só funciona quando o lead está `approved`, `OUTREACH_ENABLED=true` e `OUTREACH_WEBHOOK_URL` está configurado.
+Sem `OPENAI_API_KEY`, os rascunhos usam um gerador determinístico para permitir o teste completo. Sem `DEEPSEEK_API_KEY`, a qualificação profunda usa heurística local. Sem `HUNTER_API_KEY`, o contato pode ser preenchido manualmente pela API. O envio só funciona quando o lead está `approved`, `OUTREACH_ENABLED=true` e `OUTREACH_WEBHOOK_URL` está configurado.
+
+Para habilitar o portal de login em produção, configure:
+
+- `PORTAL_USERNAME`
+- `PORTAL_PASSWORD`
+- `PORTAL_SECRET`
+- `PORTAL_SESSION_DAYS`
+- `PORTAL_COOKIE_SECURE`
 
 O runtime Python está fixado na série 3.12 por `python-api/.python-version`, inclusive para deploys nativos no Render.
 
@@ -75,9 +87,10 @@ O detector visita a página inicial e até quatro páginas públicas relacionada
 - CRM detectado: 35 ou 50 pontos, conforme a confiança;
 - evidência em páginas adicionais: até 20 pontos;
 - e-mail profissional público: 20 pontos;
-- empresa e setor identificados: 5 pontos cada.
+- empresa e setor identificados: 5 pontos cada;
+- dor pública e tipo de oportunidade: reforço adicional de score quando há reclamações, vagas ou sinais de suporte/CRM.
 
-Temperaturas: `hot` a partir de 70, `warm` a partir de 45 e `cold` abaixo disso. O workflow **B2B 03 - Descobrir e priorizar leads quentes** reúne todo o teste inicial: recebe os domínios, executa a descoberta, calcula o score e mostra somente os leads quentes. Para testar no n8n, basta importar esse único workflow. O score prioriza revisão; ele não autoriza envio automático.
+Temperaturas: `hot` a partir de 65, `warm` a partir de 40 e `cold` abaixo disso. O workflow **B2B 03 - Descobrir e priorizar leads quentes** reúne todo o teste inicial: recebe os domínios, executa a descoberta, calcula o score e mostra somente os leads quentes. Para testar no n8n, basta importar esse único workflow. O score prioriza revisão; ele não autoriza envio automático.
 
 O último nó do workflow 03 prepara uma abordagem e cria links de WhatsApp ou e-mail. O envio é manual e permanece com status `aguardando revisão manual`, evitando disparos acidentais durante os testes.
 

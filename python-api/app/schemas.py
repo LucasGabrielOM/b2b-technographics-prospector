@@ -18,15 +18,15 @@ class DiscoveryRequest(BaseModel):
 
 
 class ProspectRequest(BaseModel):
-    city: str = Field(default="Florianópolis", min_length=2, max_length=100)
+    city: str = Field(default="Santa Catarina", min_length=2, max_length=100)
     state: str = Field(default="Santa Catarina", min_length=2, max_length=100)
     segments: list[str] = Field(
-        default_factory=lambda: ["imobiliária", "concessionária", "loja", "clínica"],
+        default_factory=lambda: ["imobiliaria", "concessionaria", "loja", "clinica"],
         min_length=1,
         max_length=12,
     )
     limit: int = Field(default=100, ge=1, le=150)
-    target_contacts: int = Field(default=50, ge=1, le=100)
+    target_contacts: int = Field(default=100, ge=1, le=150)
     min_score: int = Field(default=0, ge=0, le=100)
     include_complaints: bool = True
     only_new: bool = True
@@ -36,6 +36,7 @@ class LeadPatch(BaseModel):
     company_name: str | None = None
     sector: str | None = None
     company_size: str | None = None
+    opportunity_type: str | None = None
     contact_name: str | None = None
     contact_role: str | None = None
     contact_email: EmailStr | None = None
@@ -49,8 +50,8 @@ class MarkContactedRequest(BaseModel):
 
 
 class GenerateRequest(BaseModel):
-    services: list[str] = Field(default_factory=lambda: ["automação de processos", "integração de APIs"])
-    sender_name: str = "Especialista em Automação"
+    services: list[str] = Field(default_factory=lambda: ["automacao de processos", "integracao de APIs"])
+    sender_name: str = "Especialista em Automacao"
     sender_company: str = "Sua Empresa"
 
 
@@ -65,6 +66,7 @@ class LeadOut(BaseModel):
     domain: str
     sector: str | None
     company_size: str | None
+    opportunity_type: str | None
     crm: str | None
     confidence: float
     evidence: list
