@@ -6,3 +6,4 @@ __pycache__/
 .venv/
 postgres_data/
 n8n_data/
+.n8n-local/
