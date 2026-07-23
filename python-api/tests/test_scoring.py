@@ -2,7 +2,7 @@ from types import SimpleNamespace
 
 from bs4 import BeautifulSoup
 
-from app.services import _public_emails, _public_phones, calculate_lead_score, is_business_email
+from app.services import _public_emails, _public_phones, calculate_lead_score, is_business_email, refresh_lead_score
 
 
 def test_score_is_transparent_and_capped():
@@ -32,6 +32,52 @@ def test_no_crm_is_cold_even_with_contact():
     score, temperature, _ = calculate_lead_score(lead)
     assert score == 20
     assert temperature == "cold"
+
+
+def test_refresh_score_requires_contact_for_hot_lead():
+    lead = SimpleNamespace(
+        crm="RD Station",
+        confidence=0.95,
+        evidence=[{"source": "https://example.com"}, {"source": "https://example.com/contato"}],
+        contact_email=None,
+        contact_whatsapp=None,
+        contact_phone=None,
+        company_name="Example",
+        sector="Varejo",
+        pain_score=85,
+        pain_summary="Relatos publicos sobre demora no atendimento.",
+        pain_source="https://www.reclameaqui.com.br/empresa/example",
+        opportunity_type="recuperacao de atendimento",
+    )
+
+    refresh_lead_score(lead)
+
+    assert lead.lead_score == 60
+    assert lead.temperature == "warm"
+    assert any("sem canal de contato" in reason for reason in lead.score_reasons)
+
+
+def test_refresh_score_explains_hot_lead_source():
+    lead = SimpleNamespace(
+        crm=None,
+        confidence=0,
+        evidence=[],
+        contact_email="vendas@example.com",
+        contact_whatsapp=None,
+        contact_phone=None,
+        company_name="Example",
+        sector="Varejo",
+        pain_score=80,
+        pain_summary="Relatos publicos indicam falta de retorno.",
+        pain_source="https://www.reclameaqui.com.br/empresa/example",
+        opportunity_type="recuperacao de atendimento",
+    )
+
+    refresh_lead_score(lead)
+
+    assert lead.temperature == "hot"
+    assert any("Motivo:" in reason for reason in lead.score_reasons)
+    assert any("Fonte publica:" in reason for reason in lead.score_reasons)
 
 
 def test_public_email_prefers_business_domain_and_ignores_free_mail():

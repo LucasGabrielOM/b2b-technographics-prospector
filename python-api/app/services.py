@@ -195,6 +195,12 @@ def refresh_lead_score(lead: Lead) -> None:
     technology_score, _, reasons = calculate_lead_score(lead)
     pain_score = int(getattr(lead, "pain_score", 0) or 0)
     opportunity_type = (getattr(lead, "opportunity_type", None) or "").strip()
+    has_contact = bool(
+        getattr(lead, "contact_email", None)
+        or getattr(lead, "contact_whatsapp", None)
+        or getattr(lead, "contact_phone", None)
+    )
+    has_confirmed_need = pain_score >= 45 or bool(getattr(lead, "crm", None) and float(getattr(lead, "confidence", 0) or 0) >= 0.7)
     final_score = max(technology_score, pain_score)
     if pain_score and technology_score:
         final_score = min(100, final_score + min(10, max(3, pain_score // 12)))
@@ -202,9 +208,19 @@ def refresh_lead_score(lead: Lead) -> None:
         final_score = min(100, final_score + 10)
         reasons.append(f"+10: oportunidade classificada como {opportunity_type}")
     if pain_score:
-        reasons.append(f"+sinal: reclamações públicas geraram score de dor {pain_score}")
+        reasons.append(f"+sinal: sinais publicos geraram score de dor {pain_score}")
+    if getattr(lead, "pain_summary", None):
+        reasons.append(f"Motivo: {lead.pain_summary}")
+    if getattr(lead, "pain_source", None):
+        reasons.append(f"Fonte publica: {lead.pain_source}")
+    if not has_contact:
+        final_score = min(final_score, 60)
+        reasons.append("-limite: sem canal de contato publico confirmado")
+    if not has_confirmed_need:
+        final_score = min(final_score, 55)
+        reasons.append("-limite: sem dor publica forte ou CRM confirmado")
     lead.lead_score = final_score
-    lead.temperature = "hot" if lead.lead_score >= 65 else "warm" if lead.lead_score >= 40 else "cold"
+    lead.temperature = "hot" if lead.lead_score >= 70 and has_contact and has_confirmed_need else "warm" if lead.lead_score >= 45 else "cold"
     lead.score_reasons = reasons
 
 
