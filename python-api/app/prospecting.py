@@ -98,6 +98,45 @@ def normalize_domain(value: str | None) -> str | None:
     return host
 
 
+def _prospect_key(item: dict) -> str | None:
+    domain = normalize_domain(item.get("domain"))
+    if domain:
+        return f"d:{domain}"
+    company = _normalize_ascii(item.get("company_name") or item.get("company") or "").strip()
+    location = _normalize_ascii(item.get("location") or "").strip()
+    if company:
+        return f"c:{company}:{location}"
+    email = _normalize_ascii(item.get("contact_email") or "").strip()
+    if email:
+        return f"e:{email}"
+    return None
+
+
+def _dedupe_prospects(items: list[dict]) -> list[dict]:
+    unique: dict[str, dict] = {}
+    for item in items:
+        key = _prospect_key(item)
+        if not key:
+            continue
+        current = unique.get(key)
+        if current is None:
+            unique[key] = item
+            continue
+        current_has_contact = bool(current.get("contact_whatsapp") or current.get("contact_email") or current.get("contact_phone"))
+        item_has_contact = bool(item.get("contact_whatsapp") or item.get("contact_email") or item.get("contact_phone"))
+        current_score = int(current.get("lead_score") or current.get("score") or 0)
+        item_score = int(item.get("lead_score") or item.get("score") or 0)
+        current_pain = int(current.get("pain_score") or 0)
+        item_pain = int(item.get("pain_score") or 0)
+        if (
+            (item_has_contact and not current_has_contact)
+            or (item_has_contact == current_has_contact and item_score > current_score)
+            or (item_has_contact == current_has_contact and item_score == current_score and item_pain > current_pain)
+        ):
+            unique[key] = item
+    return list(unique.values())
+
+
 def _osm_query(lat: float, lon: float, limit: int) -> str:
     return f"""
 [out:json][timeout:30];
@@ -271,6 +310,7 @@ async def discover_from_osm(city: str, state: str, segments: list[str], limit: i
             "segment_match": segment_match,
         })
         seen.add(domain)
+    prospects = _dedupe_prospects(prospects)
     prospects.sort(key=lambda item: (not item["segment_match"], item["company_name"].lower()))
     return prospects[:limit]
 
@@ -305,8 +345,8 @@ async def discover_from_web(city: str, state: str, segments: list[str], limit: i
             })
             seen.add(domain)
             if len(prospects) >= limit:
-                return prospects[:limit]
-    return prospects[:limit]
+                return _dedupe_prospects(prospects)[:limit]
+    return _dedupe_prospects(prospects)[:limit]
 
 
 async def discover_businesses(city: str, state: str, segments: list[str], limit: int, settings: Settings) -> list[dict]:
@@ -324,14 +364,14 @@ async def discover_businesses(city: str, state: str, segments: list[str], limit:
             osm_prospects = []
         web_prospects = await discover_from_web(location_city, state, segments, per_location_limit, settings)
         for item in [*osm_prospects, *web_prospects]:
-            domain = item["domain"]
-            if domain in seen:
+            key = _prospect_key(item)
+            if not key or key in seen:
                 continue
             prospects.append(item)
-            seen.add(domain)
+            seen.add(key)
             if len(prospects) >= limit:
-                return prospects[:limit]
-    return prospects[:limit]
+                return _dedupe_prospects(prospects)[:limit]
+    return _dedupe_prospects(prospects)[:limit]
 
 
 def _unwrap_ddg_url(href: str) -> str:
