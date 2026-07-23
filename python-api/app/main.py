@@ -127,10 +127,28 @@ async def run_prospecting(
 ):
     """Descobre empresas e executa todo o enriquecimento sem receber domínios manualmente."""
     quick_mode = not payload.include_complaints
+    discovery_timeout = 18 if quick_mode else 45
+    scan_timeout = 8 if quick_mode else max(15, int(settings.request_timeout_seconds * 2))
+
+    def qualified_fallback() -> list[Lead]:
+        return list(db.scalars(
+            select(Lead)
+            .where(
+                Lead.lead_score >= payload.min_score,
+                Lead.status != LeadStatus.SUPPRESSED.value,
+                or_(Lead.contact_whatsapp.is_not(None), Lead.contact_email.is_not(None), Lead.contact_phone.is_not(None)),
+            )
+            .order_by(Lead.lead_score.desc(), Lead.confidence.desc(), Lead.updated_at.desc())
+            .limit(payload.limit)
+        ))
+
     candidate_pool = min(40, max(payload.limit, payload.target_contacts, 6)) if quick_mode else min(80, max(10, payload.limit * 3, payload.target_contacts * 3))
     try:
-        prospects = await discover_businesses(payload.city, payload.state, payload.segments, candidate_pool, settings)
-    except Exception as exc:
+        prospects = await asyncio.wait_for(
+            discover_businesses(payload.city, payload.state, payload.segments, candidate_pool, settings),
+            timeout=discovery_timeout,
+        )
+    except Exception:
         prospects = []
     if payload.only_new:
         existing_domains = set(db.scalars(select(Lead.domain)))
@@ -155,17 +173,7 @@ async def run_prospecting(
             "segment_match": True,
         } for lead in cached]
     if not prospects and payload.only_new:
-        fallback = list(db.scalars(
-            select(Lead)
-            .where(
-                Lead.lead_score >= payload.min_score,
-                Lead.status != LeadStatus.SUPPRESSED.value,
-                or_(Lead.contact_whatsapp.is_not(None), Lead.contact_email.is_not(None), Lead.contact_phone.is_not(None)),
-            )
-            .order_by(Lead.lead_score.desc(), Lead.confidence.desc(), Lead.updated_at.desc())
-            .limit(payload.limit)
-        ))
-        return fallback
+        return qualified_fallback()
     if not prospects:
         return []
     semaphore = asyncio.Semaphore(max(1, settings.discovery_concurrency))
@@ -173,9 +181,31 @@ async def run_prospecting(
     async def scan(item: dict) -> tuple[dict, dict]:
         async with semaphore:
             max_pages = 1 if quick_mode else 5
-            return item, await scan_domain(item["domain"], settings, max_pages=max_pages)
+            try:
+                scan_result = await asyncio.wait_for(
+                    scan_domain(item["domain"], settings, max_pages=max_pages),
+                    timeout=scan_timeout,
+                )
+            except Exception:
+                scan_result = {"crm": None, "confidence": 0.0, "evidence": [], "public_emails": [], "public_phones": [], "public_whatsapps": [], "pages_scanned": 0}
+            return item, scan_result
 
-    scanned = await asyncio.gather(*(scan(item) for item in prospects))
+    tasks = [asyncio.create_task(scan(item)) for item in prospects]
+    done, pending = await asyncio.wait(tasks, timeout=30 if quick_mode else 75)
+    for task in pending:
+        task.cancel()
+    scanned = []
+    for task in done:
+        if task.cancelled():
+            continue
+        try:
+            scanned.append(task.result())
+        except Exception:
+            continue
+    if not scanned and payload.only_new:
+        return qualified_fallback()
+    if not scanned:
+        return []
     complaint_candidates = [item for item, _ in scanned][:payload.target_contacts]
     researched = await map_complaints(complaint_candidates, settings, True) if payload.include_complaints else []
     pain_by_domain = {item["domain"]: item for item in researched}
@@ -211,17 +241,7 @@ async def run_prospecting(
         lead.confidence,
     ), reverse=True)
     if not result and payload.only_new:
-        fallback = list(db.scalars(
-            select(Lead)
-            .where(
-                Lead.lead_score >= payload.min_score,
-                Lead.status != LeadStatus.SUPPRESSED.value,
-                or_(Lead.contact_whatsapp.is_not(None), Lead.contact_email.is_not(None), Lead.contact_phone.is_not(None)),
-            )
-            .order_by(Lead.lead_score.desc(), Lead.confidence.desc(), Lead.updated_at.desc())
-            .limit(payload.limit)
-        ))
-        result.extend(fallback)
+        result.extend(qualified_fallback())
     return result[:payload.limit]
 
 
