@@ -19,7 +19,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const cities=['Florianopolis','Joinville','Blumenau','Sao Jose','Chapeco','Itajai','Criciuma','Palhoca','Jaragua do Sul','Lages','Balneario Camboriu','Tubarao']; const segments=['imobiliaria','concessionaria','loja','clinica','distribuidora','saude','automotivo','varejo']; return cities.map((city,index)=>({json:{batch:index+1,city,state:'Santa Catarina',segments,limit:8,target_contacts:8,min_score:70,include_complaints:true,only_new:true}}));"
+        "jsCode": "const cities=['Florianopolis','Joinville','Blumenau','Sao Jose','Chapeco','Itajai','Criciuma','Palhoca','Jaragua do Sul','Lages','Balneario Camboriu','Tubarao']; const segments=['imobiliaria','concessionaria','loja','clinica','distribuidora','saude','automotivo','varejo']; return cities.map((city,index)=>({json:{batch:index+1,city,state:'Santa Catarina',segments,limit:4,target_contacts:4,min_score:70,include_complaints:false,only_new:true}}));"
       },
       "id": "search-criteria",
       "name": "Região e público-alvo",
@@ -34,7 +34,7 @@
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ $json }}",
-        "options": {"timeout": 180000}
+        "options": {"timeout": 90000}
       },
       "id": "autonomous-prospecting",
       "name": "Pesquisar empresas, sites, CRM, contato e reclamações",
@@ -42,8 +42,8 @@
       "typeVersion": 4.2,
       "position": [730, 300],
       "retryOnFail": true,
-      "maxTries": 2,
-      "waitBetweenTries": 10000,
+      "maxTries": 1,
+      "waitBetweenTries": 5000,
       "continueOnFail": true
     },
     {

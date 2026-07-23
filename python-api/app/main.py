@@ -126,7 +126,7 @@ async def run_prospecting(
     settings: Settings = Depends(get_settings),
 ):
     """Descobre empresas e executa todo o enriquecimento sem receber domínios manualmente."""
-    candidate_pool = min(400, max(40, payload.limit * 8, payload.target_contacts * 6))
+    candidate_pool = min(80, max(10, payload.limit * 3, payload.target_contacts * 3))
     try:
         prospects = await discover_businesses(payload.city, payload.state, payload.segments, candidate_pool, settings)
     except Exception as exc:
@@ -163,7 +163,7 @@ async def run_prospecting(
 
     scanned = await asyncio.gather(*(scan(item) for item in prospects))
     complaint_candidates = [item for item, _ in scanned][:payload.target_contacts]
-    researched = await map_complaints(complaint_candidates, settings, payload.include_complaints)
+    researched = await map_complaints(complaint_candidates, settings, True) if payload.include_complaints else []
     pain_by_domain = {item["domain"]: item for item in researched}
     result = []
     for item, scan_result in scanned:

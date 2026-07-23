@@ -139,16 +139,16 @@ def _dedupe_prospects(items: list[dict]) -> list[dict]:
 
 def _osm_query(lat: float, lon: float, limit: int) -> str:
     return f"""
-[out:json][timeout:30];
+[out:json][timeout:12];
 (
-  nwr["name"]["website"]["shop"](around:18000,{lat},{lon});
-  nwr["name"]["website"]["office"](around:18000,{lat},{lon});
-  nwr["name"]["website"]["amenity"](around:18000,{lat},{lon});
-  nwr["name"]["contact:website"]["shop"](around:18000,{lat},{lon});
-  nwr["name"]["contact:website"]["office"](around:18000,{lat},{lon});
-  nwr["name"]["contact:website"]["amenity"](around:18000,{lat},{lon});
+  nwr["name"]["website"]["shop"](around:10000,{lat},{lon});
+  nwr["name"]["website"]["office"](around:10000,{lat},{lon});
+  nwr["name"]["website"]["amenity"](around:10000,{lat},{lon});
+  nwr["name"]["contact:website"]["shop"](around:10000,{lat},{lon});
+  nwr["name"]["contact:website"]["office"](around:10000,{lat},{lon});
+  nwr["name"]["contact:website"]["amenity"](around:10000,{lat},{lon});
 );
-out tags center {max(limit * 5, 100)};
+out tags center {max(limit * 3, 30)};
 """.strip()
 
 
@@ -362,7 +362,9 @@ async def discover_businesses(city: str, state: str, segments: list[str], limit:
             osm_prospects = await discover_from_osm(location_city, state, segments, per_location_limit, settings)
         except (httpx.HTTPError, ValueError, KeyError):
             osm_prospects = []
-        web_prospects = await discover_from_web(location_city, state, segments, per_location_limit, settings)
+        web_prospects = []
+        if settings.serper_api_key and len(osm_prospects) < per_location_limit:
+            web_prospects = await discover_from_web(location_city, state, segments, per_location_limit - len(osm_prospects), settings)
         for item in [*osm_prospects, *web_prospects]:
             key = _prospect_key(item)
             if not key or key in seen:

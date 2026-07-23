@@ -94,3 +94,40 @@ def test_autonomous_prospecting_discovers_domain_contact_and_pain(client, monkey
     reopened = client.post(f"/api/v1/leads/{lead['id']}/reopen").json()
     assert reopened["status"] == "discovered"
     assert reopened["contacted_at"] is None
+
+
+def test_autonomous_prospecting_can_skip_slow_public_complaint_search(client, monkeypatch):
+    async def fake_discover(city, state, segments, limit, settings):
+        return [{
+            "company_name": "Empresa Rapida",
+            "domain": "rapida.com.br",
+            "location": "Joinville/Santa Catarina",
+            "sector": "loja",
+            "source": "https://www.openstreetmap.org/node/2",
+            "segment_match": True,
+        }]
+
+    async def fail_if_called(prospects, settings, enabled):
+        raise AssertionError("complaint search should be skipped in quick workflow mode")
+
+    async def fake_scan(domain, settings):
+        return {
+            "crm": "HubSpot",
+            "confidence": 0.9,
+            "evidence": [{"source": "https://rapida.com.br", "technology": "HubSpot"}],
+            "public_emails": ["vendas@rapida.com.br"],
+            "public_phones": [],
+            "public_whatsapps": ["+5547999999999"],
+            "pages_scanned": 1,
+        }
+
+    monkeypatch.setattr("app.main.discover_businesses", fake_discover)
+    monkeypatch.setattr("app.main.map_complaints", fail_if_called)
+    monkeypatch.setattr("app.main.scan_domain", fake_scan)
+
+    response = client.post("/api/v1/prospect/run", json={"limit": 4, "target_contacts": 4, "min_score": 70, "include_complaints": False})
+
+    assert response.status_code == 200
+    lead = response.json()[0]
+    assert lead["temperature"] == "hot"
+    assert any("Fonte tecnica:" in reason for reason in lead["score_reasons"])

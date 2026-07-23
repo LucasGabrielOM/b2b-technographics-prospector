@@ -177,6 +177,9 @@ def calculate_lead_score(lead: Lead) -> tuple[int, str, list[str]]:
         points = min(20, (evidence_pages - 1) * 10)
         score += points
         reasons.append(f"+{points}: evidência encontrada em {evidence_pages} páginas")
+    source = next((item.get("source") for item in (lead.evidence or []) if item.get("source")), None)
+    if source:
+        reasons.append(f"Fonte tecnica: {source}")
     if getattr(lead, "contact_email", None) or getattr(lead, "contact_whatsapp", None) or getattr(lead, "contact_phone", None):
         score += 20
         reasons.append("+20: canal de contato público disponível")
