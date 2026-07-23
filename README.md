@@ -64,6 +64,40 @@ Para habilitar o portal de login em produção, configure:
 
 O runtime Python está fixado na série 3.12 por `python-api/.python-version`, inclusive para deploys nativos no Render.
 
+## Rodar n8n local sem Docker
+
+Use esta opção quando quiser executar mais cidades/lotes do workflow sem depender dos limites do n8n web. O n8n local continua chamando a API publicada no Render e usando o mesmo PostgreSQL configurado no backend, então o painel permanece sincronizado.
+
+Pré-requisito: instalar o **Node.js LTS** em https://nodejs.org/.
+
+No PowerShell:
+
+```powershell
+cd "C:\Users\Usuário\Documents\Codex\2026-07-21\criar-uma-ia-para-automa-o\outputs\b2b-prospector"
+.\scripts\start-n8n-local.ps1
+```
+
+Depois abra:
+
+```text
+http://localhost:5678
+```
+
+Importe o workflow:
+
+```text
+n8n/workflows/03_hot_leads.json
+```
+
+Para volume maior, prefira rodar em lotes. Exemplo seguro:
+
+- 4 a 6 cidades por execução;
+- `limit` entre 8 e 15 por cidade;
+- `include_complaints=false` na coleta diária rápida;
+- pesquisa profunda de reclamações/vagas em etapa separada ou com `SERPER_API_KEY`.
+
+Rodar local evita limite do n8n web, mas não substitui a proteção de timeout no backend. O commit `Add prospecting time budget fallback` precisa estar publicado na `main` para a API no Render não ficar presa em site lento ou serviço público instável.
+
 ## Primeiro teste
 
 1. Abra o workflow **B2B 01 - Descoberta de technographics**.
