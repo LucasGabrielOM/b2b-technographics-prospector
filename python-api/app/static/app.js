@@ -34,7 +34,6 @@ async function ensurePortalSession() {
     throw new Error('redirecting');
   }
 }
-
 function notify(message, error = false) {
   byId('notice').textContent = message;
   byId('notice').className = `notice${error ? ' error' : ''}`;
@@ -201,7 +200,6 @@ function handleActions(event) {
   if (target.dataset.reopen) reopenLead(target.dataset.reopen);
   if (target.dataset.contact) window.setTimeout(() => markContacted(target.dataset.id, target.dataset.contact), 600);
 }
-
 byId('todayLabel').textContent = new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' });
 byId('filters').addEventListener('submit', (event) => { event.preventDefault(); applyFilters(); });
 byId('search').addEventListener('input', () => applyFilters()); byId('temperature').addEventListener('change', () => applyFilters()); byId('status').addEventListener('change', () => applyFilters());
