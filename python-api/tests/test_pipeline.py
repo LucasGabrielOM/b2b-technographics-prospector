@@ -1,5 +1,8 @@
 def test_health(client):
     assert client.get("/health").json() == {"status": "ok"}
+    assert client.get("/login").status_code == 200
+    login = client.post("/api/v1/auth/login", json={"username": "admin", "password": "demo1234"})
+    assert login.status_code == 200
     dashboard = client.get("/dashboard")
     assert dashboard.status_code == 200
     assert "Seu próximo cliente pode estar aqui" in dashboard.text

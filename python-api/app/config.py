@@ -5,6 +5,11 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     database_url: str = "sqlite:///./prospector.db"
+    portal_username: str = "admin"
+    portal_password: str = "demo1234"
+    portal_secret: str = "change-me-in-production"
+    portal_session_days: int = 7
+    portal_cookie_secure: bool = False
     openai_api_key: str | None = None
     openai_model: str = "gpt-5.6-terra"
     deepseek_api_key: str | None = None

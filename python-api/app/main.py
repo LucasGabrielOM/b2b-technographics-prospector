@@ -2,13 +2,14 @@ import asyncio
 from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, HTTPException, Query
-from fastapi.responses import FileResponse
+from fastapi import Body, Depends, FastAPI, HTTPException, Query, Request, Response
+from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import or_
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from .auth import SESSION_COOKIE, authenticate, create_session_token, require_portal_user, portal_settings
 from .config import Settings, get_settings
 from .database import Base, engine, ensure_lead_contact_columns, get_db
 from .models import Lead, LeadStatus
@@ -35,9 +36,67 @@ def health():
     return {"status": "ok"}
 
 
+@app.get("/", include_in_schema=False)
+def root(request: Request, settings: Settings = Depends(get_settings)):
+    try:
+        require_portal_user(request, settings)
+        return RedirectResponse(url="/dashboard", status_code=302)
+    except HTTPException:
+        return RedirectResponse(url="/login", status_code=302)
+
+
+@app.get("/login", include_in_schema=False)
+def login_page(request: Request, settings: Settings = Depends(get_settings)):
+    try:
+        require_portal_user(request, settings)
+        return RedirectResponse(url="/dashboard", status_code=302)
+    except HTTPException:
+        return FileResponse(STATIC_DIR / "login.html")
+
+
 @app.get("/dashboard", include_in_schema=False)
-def dashboard():
+def dashboard(request: Request, settings: Settings = Depends(get_settings)):
+    try:
+        require_portal_user(request, settings)
+    except HTTPException:
+        return RedirectResponse(url="/login?next=/dashboard", status_code=302)
     return FileResponse(STATIC_DIR / "index.html")
+
+
+@app.get("/api/v1/auth/me")
+def auth_me(request: Request, settings: Settings = Depends(get_settings)):
+    username = require_portal_user(request, settings)
+    return {"username": username}
+
+
+@app.post("/api/v1/auth/login")
+def auth_login(
+    response: Response,
+    payload: dict = Body(...),
+    settings: Settings = Depends(get_settings),
+):
+    username = str(payload.get("username", "")).strip()
+    password = str(payload.get("password", "")).strip()
+    if not authenticate(username, password, settings):
+        raise HTTPException(status_code=401, detail="Credenciais invalidas")
+    _, _, secret, ttl_seconds, secure_cookie = portal_settings(settings)
+    token = create_session_token(username, secret, ttl_seconds)
+    response.set_cookie(
+        key=SESSION_COOKIE,
+        value=token,
+        httponly=True,
+        samesite="lax",
+        secure=secure_cookie,
+        max_age=ttl_seconds,
+        path="/",
+    )
+    return {"status": "ok", "username": username}
+
+
+@app.post("/api/v1/auth/logout")
+def auth_logout(response: Response):
+    response.delete_cookie(key=SESSION_COOKIE, path="/")
+    return {"status": "ok"}
 
 
 @app.post("/api/v1/leads/discover", response_model=list[LeadOut])

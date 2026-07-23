@@ -4,6 +4,8 @@
 
 Abra `/dashboard` na URL da API para visualizar todos os leads persistidos pelo n8n. O painel permite filtrar por temperatura e status, pesquisar, editar os contatos, abrir o site da empresa, preparar WhatsApp/e-mail e marcar ou reabrir leads enviados. Painel, API e n8n usam a mesma tabela PostgreSQL; as alterações são sincronizadas imediatamente.
 
+O acesso ao painel é protegido por login. O portal demo fica em `/login` e redireciona para o dashboard após autenticação. No ambiente local, o padrão é `admin / demo1234`; no Render, ajuste `PORTAL_USERNAME`, `PORTAL_PASSWORD` e `PORTAL_SECRET`.
+
 ## Prospecção automática completa
 
 O workflow **B2B 03 - Prospecção automática completa** não recebe uma lista de domínios. Ele recebe apenas cidade, estado, segmentos e limite, descobre empresas com site na região, visita os sites, encontra CRM e canais de contato, pesquisa sinais públicos de reclamações e vagas, pontua os leads e prepara mensagens de WhatsApp ou e-mail.
@@ -51,6 +53,14 @@ docker compose exec n8n n8n import:workflow --separate --input=/workflows
 - Saúde: http://localhost:8000/health
 
 Sem `OPENAI_API_KEY`, os rascunhos usam um gerador determinístico para permitir o teste completo. Sem `DEEPSEEK_API_KEY`, a qualificação profunda usa heurística local. Sem `HUNTER_API_KEY`, o contato pode ser preenchido manualmente pela API. O envio só funciona quando o lead está `approved`, `OUTREACH_ENABLED=true` e `OUTREACH_WEBHOOK_URL` está configurado.
+
+Para habilitar o portal de login em produção, configure:
+
+- `PORTAL_USERNAME`
+- `PORTAL_PASSWORD`
+- `PORTAL_SECRET`
+- `PORTAL_SESSION_DAYS`
+- `PORTAL_COOKIE_SECURE`
 
 O runtime Python está fixado na série 3.12 por `python-api/.python-version`, inclusive para deploys nativos no Render.
 

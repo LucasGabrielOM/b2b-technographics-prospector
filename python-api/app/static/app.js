@@ -17,13 +17,22 @@ function safeUrl(value, fallback = '#') {
 }
 
 async function api(path, options = {}) {
-  const response = await fetch(path, { ...options, headers: { 'Content-Type': 'application/json', ...(options.headers || {}) } });
+  const response = await fetch(path, { credentials: 'same-origin', ...options, headers: { 'Content-Type': 'application/json', ...(options.headers || {}) } });
   if (!response.ok) {
     let message = `Erro ${response.status}`;
     try { const body = await response.json(); message = body.detail || message; } catch (_) { /* resposta sem JSON */ }
     throw new Error(message);
   }
   return response.json();
+}
+
+async function ensurePortalSession() {
+  try {
+    await api('/api/v1/auth/me', { method: 'GET' });
+  } catch (_) {
+    window.location.replace('/login?next=/dashboard');
+    throw new Error('redirecting');
+  }
 }
 
 function notify(message, error = false) {
@@ -203,6 +212,17 @@ byId('refresh').addEventListener('click', loadLeads); byId('exportCsv').addEvent
 byId('closeDrawer').addEventListener('click', closeDrawer); byId('drawerBackdrop').addEventListener('click', closeDrawer); byId('menuToggle').addEventListener('click', () => byId('sidebar').classList.toggle('open')); document.querySelectorAll('.nav-link').forEach((link) => link.addEventListener('click', () => byId('sidebar').classList.remove('open')));
 byId('closeEditor').addEventListener('click', () => byId('editor').close()); byId('cancelEdit').addEventListener('click', () => byId('editor').close());
 byId('editForm').addEventListener('submit', async (event) => { event.preventDefault(); const id = byId('leadId').value; const payload = { company_name: byId('companyName').value || null, sector: byId('sector').value || null, contact_name: byId('contactName').value || null, contact_role: byId('contactRole').value || null, contact_email: byId('contactEmail').value || null, contact_whatsapp: byId('contactWhatsapp').value || null, contact_phone: byId('contactPhone').value || null, notes: byId('notes').value || null }; try { await api(`/api/v1/leads/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }); byId('editor').close(); await loadLeads(); notify('Lead atualizado com sucesso.'); } catch (error) { notify(error.message, true); } });
+const logoutButton = byId('logoutBtn');
+if (logoutButton) {
+  logoutButton.addEventListener('click', async () => {
+    try { await api('/api/v1/auth/logout', { method: 'POST' }); }
+    finally { window.location.replace('/login'); }
+  });
+}
 
-loadLeads();
-window.setInterval(loadLeads, 60000);
+ensurePortalSession()
+  .then(() => {
+    loadLeads();
+    window.setInterval(loadLeads, 60000);
+  })
+  .catch(() => {});
