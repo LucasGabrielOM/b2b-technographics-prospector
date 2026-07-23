@@ -15,7 +15,7 @@ Agenda diária -> região/segmentos -> descobrir empresas e sites -> analisar CR
               -> pesquisar reclamações -> pontuar -> preparar mensagem
 ```
 
-Para testar gratuitamente, importe `n8n/workflows/03_hot_leads.json` e execute **Testar agora**. O padrão agora pesquisa Santa Catarina inteira em lotes pequenos por cidade. Esse fluxo prioriza estabilidade: busca empresas com site, detecta CRM, encontra contato público, remove duplicados e retorna somente leads com score alto. A busca pública profunda de reclamações e vagas fica opcional por API, porque rodar isso dentro da chamada principal do n8n pode causar timeout. Para uso comercial estável com pesquisa profunda, configure `SERPER_API_KEY` no Render.
+Para testar gratuitamente, importe `n8n/workflows/03_hot_leads.json` e execute **Testar agora**. O padrão agora pesquisa Santa Catarina inteira em lotes pequenos por cidade. Esse fluxo prioriza estabilidade: busca empresas com site, detecta CRM, encontra contato público, remove duplicados e retorna leads quentes ou mornos qualificados com score mínimo 45. A busca pública profunda de reclamações e vagas fica opcional por API, porque rodar isso dentro da chamada principal do n8n pode causar timeout. Para uso comercial estável com pesquisa profunda, configure `SERPER_API_KEY` no Render.
 
 Se quiser aprofundar a qualificação com IA, configure `DEEPSEEK_API_KEY`. Nesse modo, o backend usa a DeepSeek como camada de leitura dos sinais públicos para resumir a oportunidade e reforçar o score.
 

@@ -131,3 +131,38 @@ def test_autonomous_prospecting_can_skip_slow_public_complaint_search(client, mo
     lead = response.json()[0]
     assert lead["temperature"] == "hot"
     assert any("Fonte tecnica:" in reason for reason in lead["score_reasons"])
+
+
+def test_autonomous_prospecting_returns_warm_qualified_crm_leads(client, monkeypatch):
+    async def fake_discover(city, state, segments, limit, settings):
+        return [{
+            "company_name": "Empresa Morna",
+            "domain": "morna.com.br",
+            "location": "Blumenau/Santa Catarina",
+            "sector": "varejo",
+            "source": "https://www.openstreetmap.org/node/3",
+            "segment_match": True,
+        }]
+
+    async def fake_scan(domain, settings):
+        return {
+            "crm": "Pipedrive",
+            "confidence": 0.55,
+            "evidence": [{"source": "https://morna.com.br", "technology": "Pipedrive"}],
+            "public_emails": ["comercial@morna.com.br"],
+            "public_phones": [],
+            "public_whatsapps": [],
+            "pages_scanned": 1,
+        }
+
+    monkeypatch.setattr("app.main.discover_businesses", fake_discover)
+    monkeypatch.setattr("app.main.scan_domain", fake_scan)
+
+    response = client.post("/api/v1/prospect/run", json={"limit": 8, "target_contacts": 8, "min_score": 45, "include_complaints": False})
+
+    assert response.status_code == 200
+    lead = response.json()[0]
+    assert lead["domain"] == "morna.com.br"
+    assert lead["lead_score"] >= 45
+    assert lead["temperature"] == "warm"
+    assert lead["contact_email"] == "comercial@morna.com.br"
