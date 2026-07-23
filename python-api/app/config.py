@@ -7,6 +7,9 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///./prospector.db"
     openai_api_key: str | None = None
     openai_model: str = "gpt-5.6-terra"
+    deepseek_api_key: str | None = None
+    deepseek_api_base_url: str = "https://api.deepseek.com"
+    deepseek_model: str = "deepseek-chat"
     hunter_api_key: str | None = None
     serper_api_key: str | None = None
     outreach_enabled: bool = False

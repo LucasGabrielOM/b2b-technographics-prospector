@@ -187,17 +187,24 @@ def calculate_lead_score(lead: Lead) -> tuple[int, str, list[str]]:
         score += 5
         reasons.append("+5: setor identificado")
     score = min(100, score)
-    temperature = "hot" if score >= 70 else "warm" if score >= 45 else "cold"
+    temperature = "hot" if score >= 65 else "warm" if score >= 40 else "cold"
     return score, temperature, reasons
 
 
 def refresh_lead_score(lead: Lead) -> None:
     technology_score, _, reasons = calculate_lead_score(lead)
     pain_score = int(getattr(lead, "pain_score", 0) or 0)
-    lead.lead_score = max(technology_score, pain_score)
+    opportunity_type = (getattr(lead, "opportunity_type", None) or "").strip()
+    final_score = max(technology_score, pain_score)
+    if pain_score and technology_score:
+        final_score = min(100, final_score + min(10, max(3, pain_score // 12)))
+    if opportunity_type and opportunity_type != "prospecao consultiva":
+        final_score = min(100, final_score + 10)
+        reasons.append(f"+10: oportunidade classificada como {opportunity_type}")
     if pain_score:
         reasons.append(f"+sinal: reclamações públicas geraram score de dor {pain_score}")
-    lead.temperature = "hot" if lead.lead_score >= 70 else "warm" if lead.lead_score >= 45 else "cold"
+    lead.lead_score = final_score
+    lead.temperature = "hot" if lead.lead_score >= 65 else "warm" if lead.lead_score >= 40 else "cold"
     lead.score_reasons = reasons
 
 
@@ -231,11 +238,12 @@ def _demo_draft(lead: Lead, request: GenerateRequest) -> dict[str, str]:
     company = lead.company_name or lead.domain
     crm = lead.crm or "seu CRM"
     services = ", ".join(request.services[:3])
+    opportunity = lead.opportunity_type or "seu processo comercial"
     return {
         "subject": f"Uma ideia para evoluir o {crm} na {company}",
         "body": (
             f"Olá{(' ' + lead.contact_name) if lead.contact_name else ''},\n\n"
-            f"Ao pesquisar a operação da {company}, encontrei sinais públicos de uso do {crm}. "
+            f"Ao pesquisar a operação da {company}, encontrei sinais públicos de uso do {crm} e uma oportunidade de {opportunity}. "
             f"Trabalhamos com {services} para reduzir tarefas manuais e melhorar a visibilidade do funil.\n\n"
             "Faria sentido uma conversa de 15 minutos para avaliarmos se há algum gargalo que valha automatizar?\n\n"
             f"Abraço,\n{request.sender_name}\n{request.sender_company}"

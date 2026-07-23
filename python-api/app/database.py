@@ -34,6 +34,7 @@ def ensure_lead_contact_columns() -> None:
         additions = {
             "location": "VARCHAR(160)",
             "discovery_source": "VARCHAR(500)",
+            "opportunity_type": "VARCHAR(120)",
             "pain_score": "INTEGER DEFAULT 0",
             "pain_summary": "TEXT",
             "pain_source": "VARCHAR(1000)",

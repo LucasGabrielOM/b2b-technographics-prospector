@@ -6,6 +6,64 @@
   <meta name="theme-color" content="#111827">
   <title>LeadPilot — Inteligência Comercial</title>
   <link rel="stylesheet" href="/static/style.css">
+  <style>
+    html, body {
+      margin: 0;
+      min-height: 100%;
+      background: #f4f6fa;
+      color: #172033;
+      font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    body {
+      overflow-x: hidden;
+    }
+
+    .sidebar {
+      position: fixed;
+      inset: 0 auto 0 0;
+      width: 242px;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      background: #101828;
+      color: #fff;
+      padding: 24px 16px 18px;
+      z-index: 40;
+    }
+
+    .app {
+      margin-left: 242px;
+      min-height: 100vh;
+    }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 30;
+      display: flex;
+      align-items: center;
+      min-height: 66px;
+      padding: 0 30px;
+      background: rgba(255, 255, 255, 0.94);
+      border-bottom: 1px solid #e8ebf1;
+      backdrop-filter: blur(12px);
+    }
+
+    main {
+      max-width: 1530px;
+      margin: 0 auto;
+      padding: 30px 30px 50px;
+    }
+
+    .page-intro,
+    .surface,
+    .stat,
+    .lead-drawer,
+    dialog {
+      background: #fff;
+    }
+  </style>
 </head>
 <body>
   <aside class="sidebar" id="sidebar">

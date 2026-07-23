@@ -67,7 +67,7 @@ async def run_prospecting(
     settings: Settings = Depends(get_settings),
 ):
     """Descobre empresas e executa todo o enriquecimento sem receber domínios manualmente."""
-    candidate_pool = min(500, max(100, payload.limit * 5))
+    candidate_pool = min(1000, max(200, payload.limit * 8))
     try:
         prospects = await discover_businesses(payload.city, payload.state, payload.segments, candidate_pool, settings)
     except Exception as exc:
@@ -78,9 +78,11 @@ async def run_prospecting(
     else:
         prospects = prospects[:payload.limit]
     if not prospects and not payload.only_new:
+        broad_city = payload.city.strip().lower() in {"", "santa catarina", "sc", "estado de santa catarina"}
+        location_pattern = f"%/{payload.state}" if broad_city else f"{payload.city}/%"
         cached = list(db.scalars(
             select(Lead)
-            .where(Lead.location.ilike(f"{payload.city}/%"), Lead.status != LeadStatus.SUPPRESSED.value)
+            .where(Lead.location.ilike(location_pattern), Lead.status != LeadStatus.SUPPRESSED.value)
             .order_by(Lead.updated_at.desc())
             .limit(payload.limit)
         ))
@@ -101,11 +103,7 @@ async def run_prospecting(
             return item, await scan_domain(item["domain"], settings)
 
     scanned = await asyncio.gather(*(scan(item) for item in prospects))
-    contact_candidates = [
-        item for item, scan_result in scanned
-        if scan_result["public_emails"] or scan_result["public_phones"] or scan_result["public_whatsapps"]
-    ]
-    complaint_candidates = contact_candidates[:max(payload.target_contacts, 60)]
+    complaint_candidates = [item for item, _ in scanned][:max(payload.target_contacts, 100)]
     researched = await map_complaints(complaint_candidates, settings, payload.include_complaints)
     pain_by_domain = {item["domain"]: item for item in researched}
     result = []
@@ -119,6 +117,7 @@ async def run_prospecting(
         lead.location = item["location"]
         lead.sector = item.get("sector") or lead.sector
         lead.discovery_source = item["source"]
+        lead.opportunity_type = item.get("opportunity_type") or lead.opportunity_type
         lead.crm = scan_result["crm"]
         lead.confidence = scan_result["confidence"]
         lead.evidence = scan_result["evidence"]
@@ -156,7 +155,7 @@ def list_leads(
         query = query.where(Lead.temperature == temperature)
     if q:
         term = f"%{q.strip()}%"
-        query = query.where(or_(Lead.company_name.ilike(term), Lead.domain.ilike(term), Lead.crm.ilike(term)))
+        query = query.where(or_(Lead.company_name.ilike(term), Lead.domain.ilike(term), Lead.crm.ilike(term), Lead.opportunity_type.ilike(term), Lead.location.ilike(term)))
     return list(db.scalars(query.limit(limit)))
 
 
