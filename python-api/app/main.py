@@ -126,7 +126,8 @@ async def run_prospecting(
     settings: Settings = Depends(get_settings),
 ):
     """Descobre empresas e executa todo o enriquecimento sem receber domínios manualmente."""
-    candidate_pool = min(80, max(10, payload.limit * 3, payload.target_contacts * 3))
+    quick_mode = not payload.include_complaints
+    candidate_pool = min(40, max(payload.limit, payload.target_contacts, 6)) if quick_mode else min(80, max(10, payload.limit * 3, payload.target_contacts * 3))
     try:
         prospects = await discover_businesses(payload.city, payload.state, payload.segments, candidate_pool, settings)
     except Exception as exc:
@@ -153,13 +154,26 @@ async def run_prospecting(
             "source": lead.discovery_source or f"https://{lead.domain}",
             "segment_match": True,
         } for lead in cached]
+    if not prospects and payload.only_new:
+        fallback = list(db.scalars(
+            select(Lead)
+            .where(
+                Lead.lead_score >= payload.min_score,
+                Lead.status != LeadStatus.SUPPRESSED.value,
+                or_(Lead.contact_whatsapp.is_not(None), Lead.contact_email.is_not(None), Lead.contact_phone.is_not(None)),
+            )
+            .order_by(Lead.lead_score.desc(), Lead.confidence.desc(), Lead.updated_at.desc())
+            .limit(payload.limit)
+        ))
+        return fallback
     if not prospects:
         return []
     semaphore = asyncio.Semaphore(max(1, settings.discovery_concurrency))
 
     async def scan(item: dict) -> tuple[dict, dict]:
         async with semaphore:
-            return item, await scan_domain(item["domain"], settings)
+            max_pages = 1 if quick_mode else 5
+            return item, await scan_domain(item["domain"], settings, max_pages=max_pages)
 
     scanned = await asyncio.gather(*(scan(item) for item in prospects))
     complaint_candidates = [item for item, _ in scanned][:payload.target_contacts]
@@ -196,6 +210,18 @@ async def run_prospecting(
         lead.lead_score,
         lead.confidence,
     ), reverse=True)
+    if not result and payload.only_new:
+        fallback = list(db.scalars(
+            select(Lead)
+            .where(
+                Lead.lead_score >= payload.min_score,
+                Lead.status != LeadStatus.SUPPRESSED.value,
+                or_(Lead.contact_whatsapp.is_not(None), Lead.contact_email.is_not(None), Lead.contact_phone.is_not(None)),
+            )
+            .order_by(Lead.lead_score.desc(), Lead.confidence.desc(), Lead.updated_at.desc())
+            .limit(payload.limit)
+        ))
+        result.extend(fallback)
     return result[:payload.limit]
 
 

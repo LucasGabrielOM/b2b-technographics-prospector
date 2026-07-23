@@ -5,12 +5,20 @@ def test_health(client):
     assert login.status_code == 200
     dashboard = client.get("/dashboard")
     assert dashboard.status_code == 200
-    assert "Seu próximo cliente pode estar aqui" in dashboard.text
+    assert "Lucas" in dashboard.text
 
 
 def test_manual_lead_pipeline_requires_email_and_approval(client, monkeypatch):
-    async def fake_scan(domain, settings):
-        return {"crm": "Bitrix24", "confidence": 0.85, "evidence": [{"source": f"https://{domain}", "technology": "Bitrix24"}], "public_emails": [], "public_phones": ["+5548999999999"], "public_whatsapps": ["+5548999999999"], "pages_scanned": 1}
+    async def fake_scan(domain, settings, max_pages=5):
+        return {
+            "crm": "Bitrix24",
+            "confidence": 0.85,
+            "evidence": [{"source": f"https://{domain}", "technology": "Bitrix24"}],
+            "public_emails": [],
+            "public_phones": ["+5548999999999"],
+            "public_whatsapps": ["+5548999999999"],
+            "pages_scanned": 1,
+        }
 
     monkeypatch.setattr("app.main.scan_domain", fake_scan)
     lead = client.post("/api/v1/leads/discover", json={"domains": ["Example.com/path"]}).json()[0]
@@ -35,8 +43,16 @@ def test_manual_lead_pipeline_requires_email_and_approval(client, monkeypatch):
 
 
 def test_suppressed_lead_cannot_generate(client, monkeypatch):
-    async def fake_scan(domain, settings):
-        return {"crm": None, "confidence": 0, "evidence": [], "public_emails": [], "public_phones": [], "public_whatsapps": [], "pages_scanned": 1}
+    async def fake_scan(domain, settings, max_pages=5):
+        return {
+            "crm": None,
+            "confidence": 0,
+            "evidence": [],
+            "public_emails": [],
+            "public_phones": [],
+            "public_whatsapps": [],
+            "pages_scanned": 1,
+        }
 
     monkeypatch.setattr("app.main.scan_domain", fake_scan)
     lead = client.post("/api/v1/leads/discover", json={"domains": ["example.org"]}).json()[0]
@@ -47,19 +63,33 @@ def test_suppressed_lead_cannot_generate(client, monkeypatch):
 def test_autonomous_prospecting_discovers_domain_contact_and_pain(client, monkeypatch):
     async def fake_discover(city, state, segments, limit, settings):
         return [{
-            "company_name": "Empresa Automática",
+            "company_name": "Empresa Automatica",
             "domain": "empresa.com.br",
-            "location": "Florianópolis/Santa Catarina",
+            "location": "Florianopolis/Santa Catarina",
             "sector": "loja",
             "source": "https://www.openstreetmap.org/node/1",
             "segment_match": True,
         }]
 
     async def fake_complaints(prospects, settings, enabled):
-        return [{**prospects[0], "pain_score": 75, "pain_summary": "Demora e falta de retorno.", "pain_source": "https://www.reclameaqui.com.br/empresa/teste", "opportunity_type": "recuperacao de atendimento"}]
+        return [{
+            **prospects[0],
+            "pain_score": 75,
+            "pain_summary": "Demora e falta de retorno.",
+            "pain_source": "https://www.reclameaqui.com.br/empresa/teste",
+            "opportunity_type": "recuperacao de atendimento",
+        }]
 
-    async def fake_scan(domain, settings):
-        return {"crm": None, "confidence": 0, "evidence": [], "public_emails": ["contato@empresa.com.br"], "public_phones": [], "public_whatsapps": ["+5548999999999"], "pages_scanned": 2}
+    async def fake_scan(domain, settings, max_pages=5):
+        return {
+            "crm": None,
+            "confidence": 0,
+            "evidence": [],
+            "public_emails": ["contato@empresa.com.br"],
+            "public_phones": [],
+            "public_whatsapps": ["+5548999999999"],
+            "pages_scanned": max_pages,
+        }
 
     monkeypatch.setattr("app.main.discover_businesses", fake_discover)
     monkeypatch.setattr("app.main.map_complaints", fake_complaints)
@@ -68,7 +98,7 @@ def test_autonomous_prospecting_discovers_domain_contact_and_pain(client, monkey
     assert response.status_code == 200
     lead = response.json()[0]
     assert lead["domain"] == "empresa.com.br"
-    assert lead["company_name"] == "Empresa Automática"
+    assert lead["company_name"] == "Empresa Automatica"
     assert lead["opportunity_type"] == "recuperacao de atendimento"
     assert lead["pain_score"] == 75
     assert lead["lead_score"] == 91
@@ -76,7 +106,7 @@ def test_autonomous_prospecting_discovers_domain_contact_and_pain(client, monkey
     assert lead["contact_whatsapp"] == "+5548999999999"
 
     repeated = client.post("/api/v1/prospect/run", json={"limit": 10, "min_score": 0}).json()
-    assert repeated == []
+    assert repeated[0]["domain"] == "empresa.com.br"
 
     async def unavailable_discovery(city, state, segments, limit, settings):
         return []
@@ -110,7 +140,8 @@ def test_autonomous_prospecting_can_skip_slow_public_complaint_search(client, mo
     async def fail_if_called(prospects, settings, enabled):
         raise AssertionError("complaint search should be skipped in quick workflow mode")
 
-    async def fake_scan(domain, settings):
+    async def fake_scan(domain, settings, max_pages=5):
+        assert max_pages == 1
         return {
             "crm": "HubSpot",
             "confidence": 0.9,
@@ -144,7 +175,8 @@ def test_autonomous_prospecting_returns_warm_qualified_crm_leads(client, monkeyp
             "segment_match": True,
         }]
 
-    async def fake_scan(domain, settings):
+    async def fake_scan(domain, settings, max_pages=5):
+        assert max_pages == 1
         return {
             "crm": "Pipedrive",
             "confidence": 0.55,
@@ -166,3 +198,38 @@ def test_autonomous_prospecting_returns_warm_qualified_crm_leads(client, monkeyp
     assert lead["lead_score"] >= 45
     assert lead["temperature"] == "warm"
     assert lead["contact_email"] == "comercial@morna.com.br"
+
+
+def test_autonomous_prospecting_falls_back_to_existing_qualified_leads(client, monkeypatch):
+    async def first_discover(city, state, segments, limit, settings):
+        return [{
+            "company_name": "Empresa Cache",
+            "domain": "cache.com.br",
+            "location": "Itajai/Santa Catarina",
+            "sector": "varejo",
+            "source": "https://www.openstreetmap.org/node/4",
+            "segment_match": True,
+        }]
+
+    async def fake_scan(domain, settings, max_pages=5):
+        return {
+            "crm": "HubSpot",
+            "confidence": 0.9,
+            "evidence": [{"source": "https://cache.com.br", "technology": "HubSpot"}],
+            "public_emails": ["vendas@cache.com.br"],
+            "public_phones": [],
+            "public_whatsapps": [],
+            "pages_scanned": 1,
+        }
+
+    monkeypatch.setattr("app.main.discover_businesses", first_discover)
+    monkeypatch.setattr("app.main.scan_domain", fake_scan)
+    created = client.post("/api/v1/prospect/run", json={"limit": 4, "min_score": 45, "include_complaints": False}).json()
+    assert created[0]["domain"] == "cache.com.br"
+
+    async def no_new_discovery(city, state, segments, limit, settings):
+        return []
+
+    monkeypatch.setattr("app.main.discover_businesses", no_new_discovery)
+    fallback = client.post("/api/v1/prospect/run", json={"limit": 4, "min_score": 45, "include_complaints": False, "only_new": True}).json()
+    assert fallback[0]["domain"] == "cache.com.br"

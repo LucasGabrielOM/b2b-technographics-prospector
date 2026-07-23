@@ -269,7 +269,7 @@ Regras:
 
 async def discover_from_osm(city: str, state: str, segments: list[str], limit: int, settings: Settings) -> list[dict]:
     headers = {"User-Agent": settings.crawler_user_agent}
-    timeout = max(30.0, settings.request_timeout_seconds)
+    timeout = min(15.0, max(8.0, settings.request_timeout_seconds))
     async with httpx.AsyncClient(timeout=timeout, headers=headers, follow_redirects=True) as client:
         geo = await client.get(
             "https://nominatim.openstreetmap.org/search",

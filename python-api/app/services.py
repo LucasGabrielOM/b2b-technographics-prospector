@@ -99,7 +99,7 @@ def _public_phones(soup: BeautifulSoup) -> tuple[list[str], list[str]]:
     return sorted(phones), sorted(whatsapps)
 
 
-def _contact_links(soup: BeautifulSoup, base_url: str, domain: str) -> list[str]:
+def _contact_links(soup: BeautifulSoup, base_url: str, domain: str, limit: int = 4) -> list[str]:
     links: list[str] = []
     for tag in soup.find_all("a", href=True):
         href = tag.get("href", "")
@@ -110,10 +110,10 @@ def _contact_links(soup: BeautifulSoup, base_url: str, domain: str) -> list[str]
             continue
         if any(term in label for term in CONTACT_TERMS) and url not in links:
             links.append(url)
-    return links[:4]
+    return links[:limit]
 
 
-async def scan_domain(domain: str, settings: Settings) -> dict:
+async def scan_domain(domain: str, settings: Settings, max_pages: int = 5) -> dict:
     headers = {"User-Agent": settings.crawler_user_agent}
     evidence: list[dict] = []
     found_emails: set[str] = set()
@@ -124,7 +124,9 @@ async def scan_domain(domain: str, settings: Settings) -> dict:
             homepage = await client.get(f"https://{domain}")
             homepage.raise_for_status()
             home_soup, _ = _page_content(homepage)
-            urls = [str(homepage.url), *_contact_links(home_soup, str(homepage.url), domain)]
+            contact_limit = max(0, max_pages - 1)
+            urls = [str(homepage.url), *_contact_links(home_soup, str(homepage.url), domain, limit=contact_limit)]
+            urls = urls[:max(1, max_pages)]
             responses = [homepage]
             for url in urls[1:]:
                 try:
