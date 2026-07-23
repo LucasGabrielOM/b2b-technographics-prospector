@@ -19,7 +19,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const cities=['Florianopolis','Joinville','Blumenau','Itajai']; const segments=['imobiliaria','concessionaria','loja','clinica','distribuidora','saude','automotivo','varejo']; return cities.map((city,index)=>({json:{batch:index+1,city,state:'Santa Catarina',segments,limit:10,target_contacts:10,min_score:45,include_complaints:false,only_new:true}}));"
+        "jsCode": "const cities=['Florianopolis','Joinville','Blumenau','Sao Jose','Chapeco','Itajai','Criciuma','Palhoca','Jaragua do Sul','Lages','Balneario Camboriu','Tubarao']; const segments=['imobiliaria','concessionaria','loja','clinica','distribuidora','saude','automotivo','varejo','construtora','educacao','hotel','restaurante']; return cities.map((city,index)=>({json:{batch:index+1,city,state:'Santa Catarina',segments,limit:12,target_contacts:12,min_score:40,include_complaints:false,only_new:true}}));"
       },
       "id": "search-criteria",
       "name": "Região e público-alvo",

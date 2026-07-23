@@ -106,7 +106,7 @@ def test_autonomous_prospecting_discovers_domain_contact_and_pain(client, monkey
     assert lead["contact_whatsapp"] == "+5548999999999"
 
     repeated = client.post("/api/v1/prospect/run", json={"limit": 10, "min_score": 0}).json()
-    assert repeated[0]["domain"] == "empresa.com.br"
+    assert repeated == []
 
     async def unavailable_discovery(city, state, segments, limit, settings):
         return []
@@ -200,7 +200,7 @@ def test_autonomous_prospecting_returns_warm_qualified_crm_leads(client, monkeyp
     assert lead["contact_email"] == "comercial@morna.com.br"
 
 
-def test_autonomous_prospecting_falls_back_to_existing_qualified_leads(client, monkeypatch):
+def test_autonomous_prospecting_does_not_return_existing_leads_as_new(client, monkeypatch):
     async def first_discover(city, state, segments, limit, settings):
         return [{
             "company_name": "Empresa Cache",
@@ -232,4 +232,4 @@ def test_autonomous_prospecting_falls_back_to_existing_qualified_leads(client, m
 
     monkeypatch.setattr("app.main.discover_businesses", no_new_discovery)
     fallback = client.post("/api/v1/prospect/run", json={"limit": 4, "min_score": 45, "include_complaints": False, "only_new": True}).json()
-    assert fallback[0]["domain"] == "cache.com.br"
+    assert fallback == []

@@ -130,19 +130,7 @@ async def run_prospecting(
     discovery_timeout = 18 if quick_mode else 45
     scan_timeout = 8 if quick_mode else max(15, int(settings.request_timeout_seconds * 2))
 
-    def qualified_fallback() -> list[Lead]:
-        return list(db.scalars(
-            select(Lead)
-            .where(
-                Lead.lead_score >= payload.min_score,
-                Lead.status != LeadStatus.SUPPRESSED.value,
-                or_(Lead.contact_whatsapp.is_not(None), Lead.contact_email.is_not(None), Lead.contact_phone.is_not(None)),
-            )
-            .order_by(Lead.lead_score.desc(), Lead.confidence.desc(), Lead.updated_at.desc())
-            .limit(payload.limit)
-        ))
-
-    candidate_pool = min(40, max(payload.limit, payload.target_contacts, 6)) if quick_mode else min(80, max(10, payload.limit * 3, payload.target_contacts * 3))
+    candidate_pool = min(80, max(30, payload.limit * 4, payload.target_contacts * 4)) if quick_mode else min(120, max(20, payload.limit * 5, payload.target_contacts * 5))
     try:
         prospects = await asyncio.wait_for(
             discover_businesses(payload.city, payload.state, payload.segments, candidate_pool, settings),
@@ -172,8 +160,6 @@ async def run_prospecting(
             "source": lead.discovery_source or f"https://{lead.domain}",
             "segment_match": True,
         } for lead in cached]
-    if not prospects and payload.only_new:
-        return qualified_fallback()
     if not prospects:
         return []
     semaphore = asyncio.Semaphore(max(1, settings.discovery_concurrency))
@@ -202,8 +188,6 @@ async def run_prospecting(
             scanned.append(task.result())
         except Exception:
             continue
-    if not scanned and payload.only_new:
-        return qualified_fallback()
     if not scanned:
         return []
     complaint_candidates = [item for item, _ in scanned][:payload.target_contacts]
@@ -240,8 +224,6 @@ async def run_prospecting(
         lead.lead_score,
         lead.confidence,
     ), reverse=True)
-    if not result and payload.only_new:
-        result.extend(qualified_fallback())
     return result[:payload.limit]
 
 
