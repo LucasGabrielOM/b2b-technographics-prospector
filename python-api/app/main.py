@@ -3,24 +3,31 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import Body, Depends, FastAPI, HTTPException, Query, Request, Response
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.openapi.docs import get_swagger_ui_html
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import or_
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from .auth import SESSION_COOKIE, authenticate, create_session_token, require_portal_user, portal_settings
+from .auth import SESSION_COOKIE, authenticate, create_session_token, hash_password, portal_settings, require_portal_admin, require_portal_user
 from .config import Settings, get_settings
 from .database import Base, engine, ensure_lead_contact_columns, get_db
-from .models import Lead, LeadStatus
+from .models import Lead, LeadStatus, PortalUser
 from .prospecting import discover_businesses, map_complaints
-from .schemas import DiscoveryRequest, GenerateRequest, LeadOut, LeadPatch, MarkContactedRequest, ProspectRequest, SchoolProspectRequest, SuppressRequest
+from .schemas import DiscoveryRequest, GenerateRequest, LeadOut, LeadPatch, MarkContactedRequest, PortalPasswordReset, PortalUserCreate, PortalUserOut, PortalUserPatch, ProspectRequest, SchoolProspectRequest, SuppressRequest
 from .school_prospecting import INEP_SOURCE_URL, enrich_school_batch, school_evidence, select_schools
 from .services import dispatch, enrich_with_hunter, generate_draft, is_business_email, refresh_lead_score, scan_domain
 
 Base.metadata.create_all(bind=engine)
 ensure_lead_contact_columns()
-app = FastAPI(title="B2B Technographics Prospector", version="0.1.0")
+app = FastAPI(
+    title="B2B Technographics Prospector",
+    version="0.1.0",
+    docs_url=None,
+    redoc_url=None,
+    openapi_url=None,
+)
 STATIC_DIR = Path(__file__).parent / "static"
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
@@ -35,6 +42,18 @@ def find_lead(lead_id: int, db: Session) -> Lead:
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+@app.get("/openapi.json", include_in_schema=False)
+def protected_openapi(request: Request, settings: Settings = Depends(get_settings)):
+    require_portal_admin(request, settings)
+    return JSONResponse(app.openapi())
+
+
+@app.get("/docs", include_in_schema=False)
+def protected_docs(request: Request, settings: Settings = Depends(get_settings)):
+    require_portal_admin(request, settings)
+    return get_swagger_ui_html(openapi_url="/openapi.json", title="LeadPilot API")
 
 
 @app.get("/", include_in_schema=False)
@@ -66,22 +85,23 @@ def dashboard(request: Request, settings: Settings = Depends(get_settings)):
 
 @app.get("/api/v1/auth/me")
 def auth_me(request: Request, settings: Settings = Depends(get_settings)):
-    username = require_portal_user(request, settings)
-    return {"username": username}
+    return require_portal_user(request, settings).as_dict()
 
 
 @app.post("/api/v1/auth/login")
 def auth_login(
     response: Response,
     payload: dict = Body(...),
+    db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings),
 ):
     username = str(payload.get("username", "")).strip()
     password = str(payload.get("password", "")).strip()
-    if not authenticate(username, password, settings):
+    identity = authenticate(username, password, settings, db)
+    if not identity:
         raise HTTPException(status_code=401, detail="Credenciais invalidas")
     _, _, secret, ttl_seconds, secure_cookie = portal_settings(settings)
-    token = create_session_token(username, secret, ttl_seconds)
+    token = create_session_token(identity, secret, ttl_seconds)
     response.set_cookie(
         key=SESSION_COOKIE,
         value=token,
@@ -91,12 +111,82 @@ def auth_login(
         max_age=ttl_seconds,
         path="/",
     )
-    return {"status": "ok", "username": username}
+    return {"status": "ok", **identity.as_dict()}
 
 
 @app.post("/api/v1/auth/logout")
 def auth_logout(response: Response):
     response.delete_cookie(key=SESSION_COOKIE, path="/")
+    return {"status": "ok"}
+
+
+@app.get("/api/v1/admin/users", response_model=list[PortalUserOut])
+def list_portal_users(
+    request: Request,
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+):
+    require_portal_admin(request, settings)
+    return list(db.scalars(select(PortalUser).order_by(PortalUser.created_at.desc())))
+
+
+@app.post("/api/v1/admin/users", response_model=PortalUserOut, status_code=201)
+def create_portal_user(
+    request: Request,
+    payload: PortalUserCreate,
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+):
+    require_portal_admin(request, settings)
+    admin_username, _, _, _, _ = portal_settings(settings)
+    if payload.username == admin_username.strip().lower():
+        raise HTTPException(status_code=409, detail="Este nome de usuário pertence ao administrador principal")
+    if db.scalar(select(PortalUser).where(PortalUser.username == payload.username)):
+        raise HTTPException(status_code=409, detail="Nome de usuário já cadastrado")
+    user = PortalUser(
+        username=payload.username,
+        display_name=payload.display_name.strip(),
+        password_hash=hash_password(payload.password),
+        role=payload.role,
+        active=True,
+    )
+    db.add(user)
+    db.commit()
+    return user
+
+
+@app.patch("/api/v1/admin/users/{user_id}", response_model=PortalUserOut)
+def patch_portal_user(
+    user_id: int,
+    request: Request,
+    payload: PortalUserPatch,
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+):
+    require_portal_admin(request, settings)
+    user = db.get(PortalUser, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado")
+    for key, value in payload.model_dump(exclude_unset=True).items():
+        setattr(user, key, value.strip() if isinstance(value, str) else value)
+    db.commit()
+    return user
+
+
+@app.post("/api/v1/admin/users/{user_id}/reset-password")
+def reset_portal_user_password(
+    user_id: int,
+    request: Request,
+    payload: PortalPasswordReset,
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+):
+    require_portal_admin(request, settings)
+    user = db.get(PortalUser, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado")
+    user.password_hash = hash_password(payload.password)
+    db.commit()
     return {"status": "ok"}
 
 

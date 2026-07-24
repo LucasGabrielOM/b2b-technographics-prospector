@@ -3,9 +3,38 @@ def test_health(client):
     assert client.get("/login").status_code == 200
     login = client.post("/api/v1/auth/login", json={"username": "admin", "password": "demo1234"})
     assert login.status_code == 200
+    assert login.json()["role"] == "admin"
+    assert login.json()["is_admin"] is True
     dashboard = client.get("/dashboard")
     assert dashboard.status_code == 200
-    assert "Lucas" in dashboard.text
+    assert "LeadPilot" in dashboard.text
+    assert client.get("/docs").status_code == 200
+
+
+def test_admin_creates_user_with_restricted_session(client):
+    assert client.post("/api/v1/auth/login", json={"username": "admin", "password": "demo1234"}).status_code == 200
+    created = client.post("/api/v1/admin/users", json={
+        "username": "comercial.teste",
+        "display_name": "Comercial Teste",
+        "password": "SenhaForte#2026",
+        "role": "user",
+    })
+    assert created.status_code == 201
+    assert created.json()["role"] == "user"
+    assert "password" not in created.json()
+    assert client.get("/api/v1/admin/users").status_code == 200
+
+    client.post("/api/v1/auth/logout")
+    login = client.post("/api/v1/auth/login", json={
+        "username": "comercial.teste",
+        "password": "SenhaForte#2026",
+    })
+    assert login.status_code == 200
+    assert login.json()["role"] == "user"
+    assert login.json()["is_admin"] is False
+    assert client.get("/dashboard").status_code == 200
+    assert client.get("/api/v1/admin/users").status_code == 403
+    assert client.get("/docs").status_code == 403
 
 
 def test_manual_lead_pipeline_requires_email_and_approval(client, monkeypatch):

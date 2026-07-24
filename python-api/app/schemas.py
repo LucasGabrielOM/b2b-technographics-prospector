@@ -52,6 +52,38 @@ class SchoolProspectRequest(BaseModel):
         return list(dict.fromkeys(value.strip() for value in values if value.strip()))
 
 
+class PortalUserCreate(BaseModel):
+    username: str = Field(min_length=3, max_length=80, pattern=r"^[a-zA-Z0-9._-]+$")
+    display_name: str = Field(min_length=2, max_length=160)
+    password: str = Field(min_length=8, max_length=128)
+    role: str = Field(default="user", pattern="^(admin|user)$")
+
+    @field_validator("username")
+    @classmethod
+    def normalize_username(cls, value: str) -> str:
+        return value.strip().lower()
+
+
+class PortalUserPatch(BaseModel):
+    display_name: str | None = Field(default=None, min_length=2, max_length=160)
+    role: str | None = Field(default=None, pattern="^(admin|user)$")
+    active: bool | None = None
+
+
+class PortalPasswordReset(BaseModel):
+    password: str = Field(min_length=8, max_length=128)
+
+
+class PortalUserOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    username: str
+    display_name: str
+    role: str
+    active: bool
+    created_at: datetime
+
+
 class LeadPatch(BaseModel):
     company_name: str | None = None
     sector: str | None = None

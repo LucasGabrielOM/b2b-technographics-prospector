@@ -3,172 +3,160 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="theme-color" content="#111827">
-  <title>LeadPilot — Inteligência Comercial</title>
+  <meta name="theme-color" content="#0b1524">
+  <meta name="description" content="Dashboard de inteligência comercial LeadPilot">
+  <title>LeadPilot · Inteligência comercial</title>
   <link rel="stylesheet" href="/static/style.css">
-  <style>
-    html, body {
-      margin: 0;
-      min-height: 100%;
-      background: #f4f6fa;
-      color: #172033;
-      font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    }
-
-    body {
-      overflow-x: hidden;
-    }
-
-    .sidebar {
-      position: fixed;
-      inset: 0 auto 0 0;
-      width: 242px;
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      background: #101828;
-      color: #fff;
-      padding: 24px 16px 18px;
-      z-index: 40;
-    }
-
-    .app {
-      margin-left: 242px;
-      min-height: 100vh;
-    }
-
-    .topbar {
-      position: sticky;
-      top: 0;
-      z-index: 30;
-      display: flex;
-      align-items: center;
-      min-height: 66px;
-      padding: 0 30px;
-      background: rgba(255, 255, 255, 0.94);
-      border-bottom: 1px solid #e8ebf1;
-      backdrop-filter: blur(12px);
-    }
-
-    main {
-      max-width: 1530px;
-      margin: 0 auto;
-      padding: 30px 30px 50px;
-    }
-
-    .page-intro,
-    .surface,
-    .stat,
-    .lead-drawer,
-    dialog {
-      background: #fff;
-    }
-  </style>
 </head>
 <body>
+  <div id="mobileOverlay" class="mobile-overlay hidden"></div>
   <aside class="sidebar" id="sidebar">
     <a class="brand" href="#overview" aria-label="LeadPilot">
-      <span class="brand-symbol"><i></i><i></i><i></i></span>
+      <span class="brand-mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M5 19V9m7 10V5m7 14v-7"/><path d="M3 19h18"/></svg></span>
       <span><strong>LeadPilot</strong><small>Revenue intelligence</small></span>
     </a>
+    <div class="workspace-chip"><span id="workspaceInitial">L</span><div><small>WORKSPACE</small><strong>Prospecção Brasil</strong></div></div>
     <nav aria-label="Navegação principal">
-      <a class="nav-link active" href="#overview"><span class="nav-icon">⌂</span><span>Visão geral</span></a>
-      <a class="nav-link" href="#leads"><span class="nav-icon">◎</span><span>Oportunidades</span><b id="navLeadCount">0</b></a>
-      <a class="nav-link" href="/docs" target="_blank" rel="noopener"><span class="nav-icon">↗</span><span>Integrações</span></a>
+      <a class="nav-link active" href="#overview"><svg viewBox="0 0 24 24"><path d="M3 11 12 3l9 8v9a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/></svg><span>Visão geral</span></a>
+      <a class="nav-link" href="#leads"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="4"/><path d="M2 21a7 7 0 0 1 14 0m2-12v6m-3-3h6"/></svg><span>Oportunidades</span><b id="navLeadCount">0</b></a>
+      <a class="nav-link admin-only" href="#team"><svg viewBox="0 0 24 24"><circle cx="8" cy="8" r="3"/><circle cx="17" cy="9" r="3"/><path d="M2 21a6 6 0 0 1 12 0m1-6a6 6 0 0 1 7 6"/></svg><span>Usuários</span></a>
+      <a class="nav-link admin-only" href="/docs" target="_blank" rel="noopener"><svg viewBox="0 0 24 24"><path d="M14 3h7v7m0-7L11 13"/><path d="M10 5H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-5"/></svg><span>Integrações</span></a>
     </nav>
-    <div class="sidebar-insight">
-      <span class="mini-label">AUTOMAÇÃO ATIVA</span>
+    <div class="system-card admin-only">
+      <div><span class="live-dot"></span><small>AUTOMAÇÃO ATIVA</small></div>
       <strong>n8n + PostgreSQL</strong>
-      <p>Novos leads entram automaticamente no seu pipeline.</p>
-      <div><i></i> Sistema operacional</div>
+      <p>A descoberta e a deduplicação trabalham em segundo plano.</p>
     </div>
-    <footer><span class="profile-avatar">LG</span><div><strong>Lucas Gabriel</strong><small>Administrador</small></div></footer>
+    <footer class="profile">
+      <span class="profile-avatar" id="profileAvatar">LP</span>
+      <div><strong id="profileName">Carregando…</strong><small id="profileRole">Acesso comercial</small></div>
+      <button id="logoutBtn" type="button" aria-label="Sair da plataforma" title="Sair">
+        <svg viewBox="0 0 24 24"><path d="M10 17l5-5-5-5m5 5H3"/><path d="M14 3h5a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-5"/></svg>
+      </button>
+    </footer>
   </aside>
 
-  <div class="app">
+  <div class="app-shell">
     <header class="topbar">
-      <button id="menuToggle" class="menu-toggle" aria-label="Abrir menu">☰</button>
-      <div class="top-title"><span>Workspace</span><b>/</b><strong>Prospecção B2B</strong></div>
+      <button id="menuToggle" class="icon-button menu-toggle" aria-label="Abrir menu">
+        <svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
+      <div class="breadcrumb"><span>LeadPilot</span><i>/</i><strong id="pageContext">Visão geral</strong></div>
       <div class="top-actions">
-        <span class="sync-status"><i></i><span id="lastUpdate">Sincronizando...</span></span>
-        <button id="refresh" class="button button-secondary"><span>↻</span> Atualizar</button>
-        <button id="logoutBtn" class="button button-secondary">Sair</button>
-        <a class="button button-primary" href="#leads">Ver oportunidades <span>→</span></a>
+        <span class="sync"><i></i><span id="lastUpdate">Sincronizando…</span></span>
+        <button id="refresh" class="button button-ghost"><svg viewBox="0 0 24 24"><path d="M20 6v5h-5M4 18v-5h5"/><path d="M18 11a7 7 0 0 0-12-4L4 11m2 2a7 7 0 0 0 12 4l2-4"/></svg><span>Atualizar</span></button>
+        <a class="button button-primary desktop-cta" href="#leads">Ver oportunidades</a>
       </div>
     </header>
 
     <main>
-      <section id="overview" class="page-intro">
-        <div><span class="eyebrow">PAINEL COMERCIAL</span><h1>Olá, Lucas. <span>Seu próximo cliente pode estar aqui.</span></h1><p>Priorize oportunidades, encontre o melhor canal e transforme sinais públicos em conversas comerciais.</p></div>
-        <div class="date-card"><small>HOJE</small><strong id="todayLabel">—</strong><span>Dados atualizados em tempo real</span></div>
+      <section id="overview" class="hero">
+        <div class="hero-copy">
+          <span class="eyebrow" id="heroEyebrow">PAINEL COMERCIAL</span>
+          <h1 id="heroTitle">Sua próxima conversa começa com um lead melhor.</h1>
+          <p id="heroSubtitle">Priorize contatos com contexto, entenda cada nota e mantenha a operação comercial avançando.</p>
+          <div class="hero-actions">
+            <a class="button button-primary" href="#leads">Abrir minha fila <span>→</span></a>
+            <button id="heroRefresh" class="button button-light" type="button">Atualizar dados</button>
+          </div>
+        </div>
+        <div class="hero-visual" aria-label="Resumo da operação">
+          <div class="visual-orbit"><span></span><span></span><span></span></div>
+          <div class="visual-card main">
+            <small>OPORTUNIDADES PRONTAS</small>
+            <strong id="heroLeadCount">—</strong>
+            <div><i></i><span>Dados sincronizados</span></div>
+          </div>
+          <div class="visual-card floating top"><span>Prioridade</span><strong id="heroHotCount">— quentes</strong></div>
+          <div class="visual-card floating bottom"><span>Cobertura</span><strong id="heroCoverage">—%</strong></div>
+        </div>
       </section>
 
       <div id="notice" class="notice hidden" role="status"></div>
-      <section id="stats" class="stats" aria-label="Indicadores comerciais">
-        <article class="stat skeleton"></article><article class="stat skeleton"></article><article class="stat skeleton"></article><article class="stat skeleton"></article><article class="stat skeleton"></article>
+
+      <section id="stats" class="stats" aria-label="Indicadores da operação">
+        <article class="metric skeleton"></article><article class="metric skeleton"></article><article class="metric skeleton"></article><article class="metric skeleton"></article>
       </section>
+
+      <section class="section-heading">
+        <div><span class="eyebrow">PRIORIDADE DE HOJE</span><h2>Comece por estas oportunidades</h2><p>Leads com maior potencial e canal público disponível.</p></div>
+        <a href="#leads">Ver toda a fila →</a>
+      </section>
+      <section id="focusLeads" class="focus-grid"><article class="focus-card skeleton"></article><article class="focus-card skeleton"></article><article class="focus-card skeleton"></article></section>
 
       <section class="analytics-grid">
         <article class="surface pipeline-card">
-          <header class="surface-head"><div><span class="eyebrow">PIPELINE</span><h2>Jornada das oportunidades</h2><p>Da descoberta ao primeiro contato</p></div><span class="period">Base atual</span></header>
+          <header><div><span class="eyebrow">PIPELINE</span><h2>Avanço da operação</h2><p>Da descoberta ao primeiro contato</p></div><span class="period">Base atual</span></header>
           <div id="pipelineChart" class="pipeline-chart"><div class="chart-skeleton"></div></div>
         </article>
         <article class="surface channel-card">
-          <header class="surface-head"><div><span class="eyebrow">COBERTURA</span><h2>Canais de contato</h2><p>Alcance disponível na base</p></div></header>
+          <header><div><span class="eyebrow">COBERTURA</span><h2>Canais disponíveis</h2><p>Como sua equipe pode iniciar contato</p></div></header>
           <div id="channelsChart" class="channels-chart"><div class="chart-skeleton"></div></div>
         </article>
-        <article class="surface crm-card">
-          <header class="surface-head"><div><span class="eyebrow">TECHNO­GRAPHICS</span><h2>CRMs detectados</h2><p>Tecnologias com mais oportunidades</p></div></header>
-          <div id="crmChart" class="crm-chart"><div class="chart-skeleton"></div></div>
+        <article class="surface mix-card">
+          <header><div><span class="eyebrow">BASE</span><h2>Perfil dos leads</h2><p>Principais segmentos mapeados</p></div></header>
+          <div id="mixChart" class="mix-chart"><div class="chart-skeleton"></div></div>
         </article>
       </section>
 
       <section id="leads" class="surface leads-panel">
         <header class="leads-header">
-          <div><span class="eyebrow">OPORTUNIDADES</span><h2>Central de leads</h2><p id="resultSummary">Carregando empresas...</p></div>
-          <div class="header-buttons"><button id="exportCsv" class="button button-secondary">⇩ Exportar CSV</button></div>
+          <div><span class="eyebrow">OPORTUNIDADES</span><h2>Central de leads</h2><p id="resultSummary">Carregando sua base…</p></div>
+          <button id="exportCsv" class="button button-light admin-only"><svg viewBox="0 0 24 24"><path d="M12 3v12m-4-4 4 4 4-4"/><path d="M4 19h16"/></svg>Exportar CSV</button>
         </header>
-
         <form id="filters" class="filters">
-          <label class="search-control"><span>⌕</span><input id="search" type="search" placeholder="Buscar empresa, domínio, CRM ou cidade"></label>
-          <select id="temperature" aria-label="Temperatura"><option value="">Temperatura</option><option value="hot">Quentes</option><option value="warm">Mornos</option><option value="cold">Frios</option></select>
-          <select id="status" aria-label="Status"><option value="">Todos os status</option><option value="discovered">Novos</option><option value="enriched">Enriquecidos</option><option value="drafted">Rascunhos</option><option value="approved">Aprovados</option><option value="sent">Enviados</option><option value="suppressed">Suprimidos</option></select>
+          <label class="search-control">
+            <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+            <input id="search" type="search" placeholder="Buscar escola, empresa, cidade ou contato">
+          </label>
+          <select id="temperature" aria-label="Temperatura"><option value="">Todas as prioridades</option><option value="hot">Quentes</option><option value="warm">Mornos</option><option value="cold">Frios</option></select>
+          <select id="status" aria-label="Status"><option value="">Todos os status</option><option value="discovered">Novos</option><option value="enriched">Enriquecidos</option><option value="drafted">Rascunhos</option><option value="approved">Aprovados</option><option value="sent">Contatados</option><option value="suppressed">Suprimidos</option></select>
           <button type="submit" class="button button-primary">Pesquisar</button>
-          <button type="button" id="clearFilters" class="clear-button">Limpar filtros</button>
+          <button type="button" id="clearFilters" class="text-button">Limpar</button>
         </form>
-
         <div class="quick-row">
           <div class="quick-filters" aria-label="Filtros rápidos">
             <button type="button" class="quick active" data-quick="all">Todos</button>
-            <button type="button" class="quick" data-quick="hot"><i class="dot hot-dot"></i> Quentes</button>
-            <button type="button" class="quick" data-quick="contact"><i class="dot contact-dot"></i> Com contato</button>
-            <button type="button" class="quick" data-quick="pending"><i class="dot pending-dot"></i> Não abordados</button>
+            <button type="button" class="quick" data-quick="hot"><i class="dot hot"></i> Quentes</button>
+            <button type="button" class="quick" data-quick="contact"><i class="dot contact"></i> Com contato</button>
+            <button type="button" class="quick" data-quick="pending"><i class="dot pending"></i> Não abordados</button>
           </div>
           <span id="activeFilterText">Ordenado por maior potencial</span>
         </div>
-
         <div class="table-wrap">
           <table>
-            <thead><tr><th>Empresa</th><th>Potencial</th><th>Tecnologia</th><th>Melhor contato</th><th>Status</th><th>Ações</th></tr></thead>
+            <thead><tr><th>Empresa / escola</th><th>Potencial</th><th>Oportunidade</th><th>Melhor contato</th><th>Status</th><th>Ações</th></tr></thead>
             <tbody id="leadRows"></tbody>
           </table>
-          <div id="empty" class="empty hidden"><span>⌕</span><h3>Nenhuma oportunidade encontrada</h3><p>Altere os filtros ou execute uma nova prospecção no n8n.</p><button id="emptyClear" type="button" class="button button-primary">Limpar filtros</button></div>
+          <div id="empty" class="empty hidden">
+            <span><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg></span>
+            <h3>Nenhum lead encontrado</h3><p>Altere os filtros para visualizar outras oportunidades.</p>
+            <button id="emptyClear" type="button" class="button button-primary">Limpar filtros</button>
+          </div>
         </div>
         <footer class="pagination"><span id="pageInfo"></span><div><button id="prevPage" class="page-button">← Anterior</button><button id="nextPage" class="page-button">Próxima →</button></div></footer>
+      </section>
+
+      <section id="team" class="surface team-panel admin-only">
+        <header class="team-header">
+          <div><span class="eyebrow">ADMINISTRAÇÃO</span><h2>Acessos da equipe</h2><p>Crie uma credencial individual e controle quem pode entrar na plataforma.</p></div>
+          <button id="openUserDialog" class="button button-primary">+ Novo usuário</button>
+        </header>
+        <div id="userList" class="user-list"><div class="chart-skeleton"></div></div>
       </section>
     </main>
   </div>
 
   <div id="drawerBackdrop" class="drawer-backdrop hidden"></div>
   <aside id="leadDrawer" class="lead-drawer" aria-hidden="true">
-    <header><div><span class="eyebrow">DETALHES DO LEAD</span><h2 id="drawerTitle">Empresa</h2><a id="drawerDomain" href="#" target="_blank" rel="noopener"></a></div><button id="closeDrawer" class="close-button" aria-label="Fechar detalhes">×</button></header>
+    <header><div><span class="eyebrow">DETALHES DO LEAD</span><h2 id="drawerTitle">Empresa</h2><a id="drawerDomain" href="#" target="_blank" rel="noopener"></a></div><button id="closeDrawer" class="close-button" aria-label="Fechar">×</button></header>
     <div id="drawerContent" class="drawer-content"></div>
     <footer id="drawerActions"></footer>
   </aside>
 
   <dialog id="editor">
     <form id="editForm">
-      <header><div><span class="eyebrow">ATUALIZAR LEAD</span><h2 id="editTitle">Empresa</h2><p>As alterações serão sincronizadas com o banco e o n8n.</p></div><button type="button" id="closeEditor" class="close-button" aria-label="Fechar">×</button></header>
+      <header><div><span class="eyebrow">ATUALIZAR LEAD</span><h2 id="editTitle">Empresa</h2><p>Salve contatos e contexto para toda a equipe.</p></div><button type="button" id="closeEditor" class="close-button">×</button></header>
       <input type="hidden" id="leadId">
       <div class="form-grid">
         <label>Empresa<input id="companyName"></label><label>Setor<input id="sector"></label>
@@ -176,7 +164,20 @@
         <label>E-mail<input id="contactEmail" type="email"></label><label>WhatsApp<input id="contactWhatsapp"></label>
         <label>Telefone<input id="contactPhone"></label><label class="full">Observações<textarea id="notes" rows="4" placeholder="Contexto, objeções e próximos passos"></textarea></label>
       </div>
-      <footer><button type="button" id="cancelEdit" class="button button-secondary">Cancelar</button><button type="submit" class="button button-primary">Salvar alterações</button></footer>
+      <footer><button type="button" id="cancelEdit" class="button button-light">Cancelar</button><button type="submit" class="button button-primary">Salvar alterações</button></footer>
+    </form>
+  </dialog>
+
+  <dialog id="userDialog">
+    <form id="userForm">
+      <header><div><span class="eyebrow">NOVO ACESSO</span><h2>Criar usuário comercial</h2><p>Essa pessoa verá leads e ações comerciais, sem configurações administrativas.</p></div><button type="button" id="closeUserDialog" class="close-button">×</button></header>
+      <div class="form-grid">
+        <label>Nome completo<input id="newDisplayName" required placeholder="Ex.: Ana Comercial"></label>
+        <label>Usuário<input id="newUsername" required pattern="[a-zA-Z0-9._-]{3,80}" placeholder="ana.comercial"></label>
+        <label class="full">Senha temporária<input id="newPassword" type="password" minlength="8" required placeholder="Mínimo de 8 caracteres"></label>
+      </div>
+      <p class="form-hint">Envie a credencial por um canal seguro. O usuário não terá acesso à área de usuários nem às integrações.</p>
+      <footer><button type="button" id="cancelUser" class="button button-light">Cancelar</button><button type="submit" class="button button-primary">Criar credencial</button></footer>
     </form>
   </dialog>
 

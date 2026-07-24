@@ -7,6 +7,7 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///./prospector.db"
     portal_username: str = "admin"
     portal_password: str = "demo1234"
+    portal_admin_display_name: str = "Lucas Gabriel"
     portal_secret: str = "change-me-in-production"
     portal_session_days: int = 7
     portal_cookie_secure: bool = False
