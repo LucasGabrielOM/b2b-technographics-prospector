@@ -29,7 +29,7 @@
     },
     {
       "parameters": {
-        "jsCode": "return [{json:{states:[],cities:[],limit:100,require_phone:true,private_category:'1',only_new:true,enrich_cnpj_limit:12}}];"
+        "jsCode": "return [{json:{states:[],cities:[],limit:100,require_phone:true,private_category:'1',only_new:true,enrich_cnpj_limit:30}}];"
       },
       "id": "school-search-criteria",
       "name": "Configurar escolas do Brasil",

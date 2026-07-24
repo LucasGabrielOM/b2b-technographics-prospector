@@ -205,12 +205,15 @@ def refresh_lead_score(lead: Lead) -> None:
         ]
         evidence = getattr(lead, "evidence", None) or []
         registry = next((item for item in evidence if item.get("type") == "public_company_registry"), None)
-        if getattr(lead, "contact_phone", None) or getattr(lead, "contact_whatsapp", None):
+        if getattr(lead, "contact_whatsapp", None):
+            score += 20
+            reasons.append("+20: WhatsApp público confirmado")
+        elif getattr(lead, "contact_phone", None):
             score += 15
-            reasons.append("+15: telefone público da escola disponível")
+            reasons.append("+15: telefone público válido no cadastro oficial")
         if getattr(lead, "contact_email", None):
-            score += 10
-            reasons.append("+10: e-mail cadastral público disponível")
+            score += 15
+            reasons.append("+15: e-mail público da escola ou mantenedora disponível")
         if getattr(lead, "contact_name", None):
             score += 10
             reasons.append(f"+10: responsável identificado ({lead.contact_name})")
@@ -220,6 +223,10 @@ def refresh_lead_score(lead: Lead) -> None:
         if getattr(lead, "registration_number", None):
             score += 5
             reasons.append("+5: CNPJ da escola/mantenedora disponível")
+        official_school = next((item for item in evidence if item.get("type") == "official_school_registry"), None)
+        if official_school and (official_school.get("has_social_media") or official_school.get("has_admin_internet")):
+            score += 5
+            reasons.append("+5: presença digital ou internet administrativa informada no Censo")
         notes = getattr(lead, "notes", None) or ""
         if "Etapas:" in notes:
             score += 5
@@ -227,7 +234,7 @@ def refresh_lead_score(lead: Lead) -> None:
         lead.lead_score = min(100, score)
         has_contact = bool(lead.contact_phone or lead.contact_whatsapp or lead.contact_email)
         lead.temperature = "hot" if lead.lead_score >= 70 and has_contact else "warm" if lead.lead_score >= 50 else "cold"
-        reasons.append("Qualificação: aderência ao público-alvo de escolas particulares; não representa intenção de compra confirmada.")
+        reasons.append("Qualificação: escola privada recente, contato público rastreável e situação cadastral considerada; não representa intenção de compra confirmada.")
         lead.score_reasons = reasons
         return
 

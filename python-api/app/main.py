@@ -83,6 +83,15 @@ def dashboard(request: Request, settings: Settings = Depends(get_settings)):
     return FileResponse(STATIC_DIR / "index.html")
 
 
+@app.get("/leads", include_in_schema=False)
+def leads_page(request: Request, settings: Settings = Depends(get_settings)):
+    try:
+        require_portal_user(request, settings)
+    except HTTPException:
+        return RedirectResponse(url="/login?next=/leads", status_code=302)
+    return FileResponse(STATIC_DIR / "leads.html")
+
+
 @app.get("/api/v1/auth/me")
 def auth_me(request: Request, settings: Settings = Depends(get_settings)):
     return require_portal_user(request, settings).as_dict()
@@ -373,17 +382,29 @@ async def run_school_prospecting(
         lead.contact_role = school.get("contact_role") or lead.contact_role
         lead.contact_email = school.get("contact_email") or lead.contact_email
         lead.contact_phone = school.get("contact_phone") or school.get("phone") or lead.contact_phone
+        lead.contact_whatsapp = school.get("contact_whatsapp") or lead.contact_whatsapp
+        lead.website_url = school.get("website_url") or lead.website_url
         stages = ", ".join(school.get("stages") or []) or "não informadas"
+        contact_origin = "CNPJ/BrasilAPI" if school.get("registry_checked") else "Censo Escolar INEP 2025"
         lead.notes = (
             f"Endereço: {school.get('address') or 'não informado'}. "
-            f"Etapas: {stages}. Código INEP: {school['school_code']}."
+            f"Etapas: {stages}. Código INEP: {school['school_code']}. "
+            f"Origem do contato: {contact_origin}."
         )
         refresh_lead_score(lead)
         result.append(lead)
         if len(result) >= payload.limit:
             break
     db.commit()
-    result.sort(key=lambda lead: (lead.lead_score, bool(lead.contact_email), bool(lead.contact_name)), reverse=True)
+    result.sort(
+        key=lambda lead: (
+            bool(lead.contact_whatsapp),
+            bool(lead.contact_email),
+            bool(lead.contact_name),
+            lead.lead_score,
+        ),
+        reverse=True,
+    )
     return result
 
 

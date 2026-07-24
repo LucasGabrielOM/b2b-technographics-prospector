@@ -47,6 +47,18 @@ def _email(value: str | None) -> str | None:
     return candidate if "@" in candidate and "." in candidate.rsplit("@", 1)[-1] else None
 
 
+def _school_quality(school: dict) -> tuple[int, str]:
+    score = 0
+    score += 5 if school.get("cnpj") else 0
+    score += 4 if school.get("has_social_media") else 0
+    score += 3 if school.get("has_admin_internet") else 0
+    score += 2 if school.get("has_broadband") else 0
+    score += 2 if int(school.get("management_staff") or 0) > 0 else 0
+    score += 1 if int(school.get("administrative_staff") or 0) > 0 else 0
+    stable_key = hashlib.sha1(school["school_code"].encode()).hexdigest()
+    return score, stable_key
+
+
 @lru_cache(maxsize=1)
 def load_school_catalog() -> tuple[dict, ...]:
     with gzip.open(CATALOG_PATH, "rt", encoding="utf-8") as source:
@@ -69,6 +81,7 @@ def select_schools(
     wanted_states = {state.upper() for state in states}
     wanted_cities = {_ascii(city) for city in cities}
     selected: list[dict] = []
+    pool_limit = max(limit, min(1000, limit * 5))
     for school in load_school_catalog():
         external_id = f"inep:{school['school_code']}"
         if external_id in existing_external_ids:
@@ -79,12 +92,14 @@ def select_schools(
             continue
         if private_category != "all" and school["private_category"] != private_category:
             continue
-        if require_phone and not school.get("phone"):
+        normalized_phone = _phone(school.get("phone"))
+        if require_phone and not normalized_phone:
             continue
-        selected.append(dict(school))
-        if len(selected) >= limit:
+        selected.append({**school, "phone": normalized_phone})
+        if len(selected) >= pool_limit:
             break
-    return selected
+    selected.sort(key=_school_quality, reverse=True)
+    return selected[:limit]
 
 
 def _best_responsible(qsa: list[dict]) -> tuple[str | None, str | None]:
@@ -165,6 +180,10 @@ def school_evidence(school: dict) -> list[dict]:
         "administrative_category": "privada",
         "private_category": PRIVATE_CATEGORY_LABELS.get(school["private_category"], school["private_category"]),
         "census_year": school["census_year"],
+        "public_phone": school.get("phone"),
+        "has_social_media": bool(school.get("has_social_media")),
+        "has_admin_internet": bool(school.get("has_admin_internet")),
+        "has_broadband": bool(school.get("has_broadband")),
     }]
     if school.get("registry_checked"):
         evidence.append({
@@ -173,5 +192,8 @@ def school_evidence(school: dict) -> list[dict]:
             "type": "public_company_registry",
             "active": bool(school.get("registry_active")),
             "status": school.get("registry_status"),
+            "public_email": school.get("contact_email"),
+            "public_phone": school.get("contact_phone"),
+            "responsible": school.get("contact_name"),
         })
     return evidence

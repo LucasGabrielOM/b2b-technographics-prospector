@@ -39,7 +39,7 @@ class SchoolProspectRequest(BaseModel):
     require_phone: bool = True
     private_category: str = Field(default="1", pattern="^(1|2|3|4|all)$")
     only_new: bool = True
-    enrich_cnpj_limit: int = Field(default=12, ge=0, le=30)
+    enrich_cnpj_limit: int = Field(default=30, ge=0, le=40)
 
     @field_validator("states")
     @classmethod
@@ -94,6 +94,8 @@ class LeadPatch(BaseModel):
     contact_email: EmailStr | None = None
     contact_phone: str | None = Field(default=None, max_length=40)
     contact_whatsapp: str | None = Field(default=None, max_length=40)
+    email_subject: str | None = Field(default=None, max_length=240)
+    email_body: str | None = Field(default=None, max_length=5000)
     notes: str | None = Field(default=None, max_length=2000)
 
 
@@ -146,3 +148,5 @@ class LeadOut(BaseModel):
     notes: str | None
     contact_channel: str | None
     contacted_at: datetime | None
+    created_at: datetime
+    updated_at: datetime

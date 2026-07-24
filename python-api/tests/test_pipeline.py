@@ -1,6 +1,8 @@
 def test_health(client):
     assert client.get("/health").json() == {"status": "ok"}
     assert client.get("/login").status_code == 200
+    assert client.get("/dashboard", follow_redirects=False).status_code == 302
+    assert client.get("/leads", follow_redirects=False).status_code == 302
     login = client.post("/api/v1/auth/login", json={"username": "admin", "password": "demo1234"})
     assert login.status_code == 200
     assert login.json()["role"] == "admin"
@@ -8,6 +10,9 @@ def test_health(client):
     dashboard = client.get("/dashboard")
     assert dashboard.status_code == 200
     assert "LeadPilot" in dashboard.text
+    leads_page = client.get("/leads")
+    assert leads_page.status_code == 200
+    assert "Central de leads" in leads_page.text
     assert client.get("/docs").status_code == 200
 
 
@@ -33,6 +38,7 @@ def test_admin_creates_user_with_restricted_session(client):
     assert login.json()["role"] == "user"
     assert login.json()["is_admin"] is False
     assert client.get("/dashboard").status_code == 200
+    assert client.get("/leads").status_code == 200
     assert client.get("/api/v1/admin/users").status_code == 403
     assert client.get("/docs").status_code == 403
 
@@ -62,7 +68,13 @@ def test_manual_lead_pipeline_requires_email_and_approval(client, monkeypatch):
     assert generated["status"] == "drafted"
     assert client.post(f"/api/v1/leads/{lead['id']}/approve").status_code == 409
 
-    client.patch(f"/api/v1/leads/{lead['id']}", json={"contact_email": "buyer@example.com"})
+    patched = client.patch(f"/api/v1/leads/{lead['id']}", json={
+        "contact_email": "buyer@example.com",
+        "email_subject": "Assunto comercial revisado",
+        "email_body": "Mensagem revisada antes do envio.",
+    }).json()
+    assert patched["email_subject"] == "Assunto comercial revisado"
+    assert patched["email_body"] == "Mensagem revisada antes do envio."
     hot = client.get("/api/v1/leads/hot", params={"min_score": 70}).json()
     assert hot[0]["id"] == lead["id"]
     assert hot[0]["temperature"] == "hot"

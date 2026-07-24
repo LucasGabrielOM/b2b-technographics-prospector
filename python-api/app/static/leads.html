@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#071525">
+  <meta name="description" content="Central de leads LeadPilot">
+  <title>Central de leads · LeadPilot</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body data-page="leads">
+  <div id="mobileOverlay" class="mobile-overlay hidden"></div>
+  <aside class="sidebar" id="sidebar">
+    <a class="brand" href="/dashboard" aria-label="LeadPilot">
+      <span class="brand-mark"><svg viewBox="0 0 24 24"><path d="M5 19V9m7 10V5m7 14v-7"/><path d="M3 19h18"/></svg></span>
+      <span><strong>LeadPilot</strong><small>Revenue intelligence</small></span>
+    </a>
+    <div class="workspace-chip"><span id="workspaceInitial">L</span><div><small>WORKSPACE</small><strong>Prospecção Brasil</strong></div></div>
+    <nav aria-label="Navegação principal">
+      <a class="nav-link" href="/dashboard">
+        <svg viewBox="0 0 24 24"><path d="M3 11 12 3l9 8v9a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/></svg><span>Dashboard</span>
+      </a>
+      <a class="nav-link active" href="/leads">
+        <svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="4"/><path d="M2 21a7 7 0 0 1 14 0m2-12v6m-3-3h6"/></svg><span>Central de leads</span><b id="navLeadCount">0</b>
+      </a>
+      <a class="nav-link admin-only" href="/dashboard#team">
+        <svg viewBox="0 0 24 24"><circle cx="8" cy="8" r="3"/><circle cx="17" cy="9" r="3"/><path d="M2 21a6 6 0 0 1 12 0m1-6a6 6 0 0 1 7 6"/></svg><span>Usuários</span>
+      </a>
+      <a class="nav-link admin-only" href="/docs" target="_blank" rel="noopener">
+        <svg viewBox="0 0 24 24"><path d="M14 3h7v7m0-7L11 13"/><path d="M10 5H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-5"/></svg><span>Integrações</span>
+      </a>
+    </nav>
+    <div class="quality-card">
+      <span>QUALIDADE DA BASE</span>
+      <strong id="sidebarCoverage">—% com contato</strong>
+      <p>WhatsApp só aparece quando confirmado. Telefone e e-mail mantêm sua origem pública.</p>
+    </div>
+    <footer class="profile">
+      <span class="profile-avatar" id="profileAvatar">LP</span>
+      <div><strong id="profileName">Carregando…</strong><small id="profileRole">Acesso comercial</small></div>
+      <button id="logoutBtn" type="button" aria-label="Sair da plataforma" title="Sair">
+        <svg viewBox="0 0 24 24"><path d="M10 17l5-5-5-5m5 5H3"/><path d="M14 3h5a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-5"/></svg>
+      </button>
+    </footer>
+  </aside>
+
+  <div class="app-shell">
+    <header class="topbar">
+      <button id="menuToggle" class="icon-button menu-toggle" aria-label="Abrir menu">
+        <svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
+      <div class="page-title"><span>Operação</span><strong>Central de leads</strong></div>
+      <div class="top-actions">
+        <span class="sync"><i></i><span id="lastUpdate">Sincronizando…</span></span>
+        <button id="refresh" class="button button-ghost">
+          <svg viewBox="0 0 24 24"><path d="M20 6v5h-5M4 18v-5h5"/><path d="M18 11a7 7 0 0 0-12-4L4 11m2 2a7 7 0 0 0 12 4l2-4"/></svg><span>Atualizar</span>
+        </button>
+        <button id="exportCsv" class="button button-primary admin-only">Exportar CSV</button>
+      </div>
+    </header>
+
+    <main class="leads-main">
+      <section class="leads-intro">
+        <div>
+          <span class="eyebrow">OPORTUNIDADES COM CONTEXTO</span>
+          <h1>Encontre, revise e aborde sem sair da sua rotina.</h1>
+          <p>Cada lead mostra o contato disponível, a fonte e o motivo da qualificação antes de qualquer envio.</p>
+        </div>
+        <div id="leadSummaryCards" class="mini-stats">
+          <article class="skeleton"></article><article class="skeleton"></article><article class="skeleton"></article>
+        </div>
+      </section>
+
+      <div id="notice" class="notice hidden" role="status"></div>
+
+      <section class="surface leads-workspace">
+        <header class="leads-header">
+          <div><span class="eyebrow">SUA BASE</span><h2>Leads disponíveis</h2><p id="resultSummary">Carregando oportunidades…</p></div>
+          <div class="view-hint"><i></i> Ordenado por qualidade e contato</div>
+        </header>
+
+        <form id="filters" class="filters">
+          <label class="search-control">
+            <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+            <input id="search" type="search" placeholder="Buscar escola, empresa, cidade ou contato">
+          </label>
+          <select id="leadType" aria-label="Tipo de lead">
+            <option value="">Todos os públicos</option><option value="school">Escolas</option><option value="company">Empresas</option>
+          </select>
+          <select id="temperature" aria-label="Prioridade">
+            <option value="">Todas as prioridades</option><option value="hot">Quentes</option><option value="warm">Mornos</option><option value="cold">Frios</option>
+          </select>
+          <select id="status" aria-label="Status">
+            <option value="">Todos os status</option><option value="discovered">Novos</option><option value="enriched">Enriquecidos</option>
+            <option value="drafted">Rascunhos</option><option value="approved">Aprovados</option><option value="sent">Contatados</option>
+          </select>
+          <button type="button" id="clearFilters" class="button button-light">Limpar</button>
+        </form>
+
+        <div class="quick-row">
+          <div class="quick-filters" aria-label="Filtros rápidos">
+            <button type="button" class="quick active" data-quick="all">Todos</button>
+            <button type="button" class="quick" data-quick="hot"><i class="dot hot"></i> Quentes</button>
+            <button type="button" class="quick" data-quick="contact"><i class="dot contact"></i> Com contato</button>
+            <button type="button" class="quick" data-quick="email">Com e-mail</button>
+            <button type="button" class="quick" data-quick="pending">Não abordados</button>
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Lead</th><th>Qualificação</th><th>Contato confirmado</th><th>Status</th><th>Próxima ação</th></tr></thead>
+            <tbody id="leadRows"></tbody>
+          </table>
+          <div id="empty" class="empty hidden">
+            <span><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg></span>
+            <h3>Nenhum lead encontrado</h3><p>Altere os filtros ou aguarde a próxima execução do workflow.</p>
+            <button id="emptyClear" type="button" class="button button-primary">Limpar filtros</button>
+          </div>
+        </div>
+        <footer class="pagination"><span id="pageInfo"></span><div><button id="prevPage" class="page-button">← Anterior</button><button id="nextPage" class="page-button">Próxima →</button></div></footer>
+      </section>
+    </main>
+  </div>
+
+  <div id="drawerBackdrop" class="drawer-backdrop hidden"></div>
+  <aside id="leadDrawer" class="lead-drawer" aria-hidden="true">
+    <header>
+      <div><span class="eyebrow">DETALHES DO LEAD</span><h2 id="drawerTitle">Lead</h2><a id="drawerSource" href="#" target="_blank" rel="noopener"></a></div>
+      <button id="closeDrawer" class="close-button" aria-label="Fechar">×</button>
+    </header>
+    <div id="drawerContent" class="drawer-content"></div>
+    <footer id="drawerActions"></footer>
+  </aside>
+
+  <dialog id="leadEditor" class="form-dialog wide-dialog">
+    <form id="editForm">
+      <header>
+        <div><span class="eyebrow">ATUALIZAR LEAD</span><h2 id="editTitle">Lead</h2><p>Corrija os dados antes de iniciar a abordagem.</p></div>
+        <button type="button" id="closeEditor" class="close-button" aria-label="Fechar">×</button>
+      </header>
+      <input type="hidden" id="leadId">
+      <div class="form-grid">
+        <label>Empresa ou escola<input id="companyName"></label><label>Setor<input id="sector"></label>
+        <label>Nome do contato<input id="contactName"></label><label>Cargo<input id="contactRole"></label>
+        <label>E-mail<input id="contactEmail" type="email"></label><label>WhatsApp confirmado<input id="contactWhatsapp" placeholder="+55…"></label>
+        <label>Telefone<input id="contactPhone"></label><label class="full">Observações<textarea id="notes" rows="4" placeholder="Contexto, objeções e próximos passos"></textarea></label>
+      </div>
+      <footer><button type="button" id="cancelEdit" class="button button-light">Cancelar</button><button class="button button-primary">Salvar alterações</button></footer>
+    </form>
+  </dialog>
+
+  <dialog id="messageDialog" class="form-dialog message-dialog">
+    <form id="messageForm">
+      <header>
+        <div><span class="eyebrow">ABORDAGEM PERSONALIZADA</span><h2 id="messageTitle">Preparar mensagem</h2><p>Revise o texto antes de abrir o canal de contato.</p></div>
+        <button type="button" id="closeMessage" class="close-button" aria-label="Fechar">×</button>
+      </header>
+      <input type="hidden" id="messageLeadId">
+      <label>Assunto do e-mail<input id="messageSubject" maxlength="240"></label>
+      <label>Mensagem<textarea id="messageBody" rows="9" maxlength="5000"></textarea></label>
+      <div class="message-meta">
+        <span id="messageChannel">Canal ainda não selecionado</span>
+        <span id="messageCount">0 caracteres</span>
+      </div>
+      <div id="contactWarning" class="contact-warning hidden"></div>
+      <footer class="message-actions">
+        <button type="button" id="saveDraft" class="button button-light">Salvar rascunho</button>
+        <a id="emailAction" class="button button-email hidden" href="#">Abrir e-mail</a>
+        <a id="whatsappAction" class="button button-whatsapp hidden" href="#" target="_blank" rel="noopener">Abrir WhatsApp</a>
+        <a id="phoneAction" class="button button-primary hidden" href="#">Ligar</a>
+      </footer>
+    </form>
+  </dialog>
+
+  <script src="/static/leads.js" defer></script>
+</body>
+</html>
