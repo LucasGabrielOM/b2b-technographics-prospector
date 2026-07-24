@@ -7,3 +7,4 @@ __pycache__/
 postgres_data/
 n8n_data/
 .n8n-local/
+.cache/

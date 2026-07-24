@@ -98,6 +98,51 @@ Para volume maior, prefira rodar em lotes. Exemplo seguro:
 
 Rodar local evita limite do n8n web, mas não substitui a proteção de timeout no backend. O commit `Add prospecting time budget fallback` precisa estar publicado na `main` para a API no Render não ficar presa em site lento ou serviço público instável.
 
+## Prospecção nacional de escolas particulares
+
+Importe no n8n local:
+
+```text
+n8n/workflows/04_private_schools.json
+```
+
+Esse workflow usa a base oficial do Censo Escolar INEP 2025 já compactada no
+projeto. Ele não depende de Overpass, DuckDuckGo ou Google para descobrir as
+escolas e, por isso, a execução principal termina rapidamente.
+
+- fonte primária: 42.454 escolas privadas declaradas ativas no Censo 2025;
+- padrão do workflow: somente categoria particular, com telefone público;
+- meta: até 100 escolas novas por execução;
+- deduplicação: código INEP (`external_id`) e domínio técnico interno únicos no PostgreSQL;
+- validação complementar: até 12 CNPJs por execução na BrasilAPI, com timeout curto;
+- falha no CNPJ não interrompe a coleta do INEP;
+- o painel mostra a fonte e os motivos da pontuação.
+
+Endpoint:
+
+```text
+POST /api/v1/schools/run
+```
+
+Corpo padrão:
+
+```json
+{
+  "states": [],
+  "cities": [],
+  "limit": 100,
+  "require_phone": true,
+  "private_category": "1",
+  "only_new": true,
+  "enrich_cnpj_limit": 12
+}
+```
+
+`states` e `cities` vazios pesquisam o Brasil inteiro. Para restringir, use por
+exemplo `"states": ["SC", "PR"]`. O telefone do INEP não é tratado
+automaticamente como WhatsApp; o sistema só cria link de WhatsApp quando esse
+canal estiver confirmado.
+
 ## Primeiro teste
 
 1. Abra o workflow **B2B 01 - Descoberta de technographics**.

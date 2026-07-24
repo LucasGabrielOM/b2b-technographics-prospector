@@ -78,6 +78,7 @@ function renderCharts() {
 }
 
 function outreachMessage(lead) {
+  if (lead.lead_type === 'school') return `Olá! Sou Lucas Gabriel, da equipe de projetos. Trabalhamos com soluções SaaS e automação para instituições de ensino, reduzindo tarefas manuais e organizando atendimento e processos. Posso falar com a pessoa responsável por tecnologia ou administração da ${leadName(lead)}?`;
   if (lead.crm) return `Olá! Sou Lucas Gabriel, da equipe de projetos. Identificamos uma oportunidade de automação relacionada ao ${lead.crm} na ${leadName(lead)}. Podemos falar com a pessoa responsável pelos processos comerciais ou pelo CRM?`;
   return `Olá! Sou Lucas Gabriel, da equipe de projetos. Trabalhamos com implantação de CRM e automação de atendimento. Podemos falar com a pessoa responsável pelos processos comerciais ou pelo pós-venda da ${leadName(lead)}?`;
 }
@@ -85,8 +86,11 @@ function outreachMessage(lead) {
 function contactLinks(lead) {
   const phone = onlyDigits(lead.contact_whatsapp);
   const validWhatsapp = phone.length >= 12 && !phone.includes('0800');
+  const maps = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${leadName(lead)} ${lead.location || ''}`)}`;
+  const realDomain = lead.domain && !String(lead.domain).endsWith('.school') ? lead.domain : null;
   return {
-    site: safeUrl(lead.domain),
+    site: safeUrl(lead.website_url || realDomain, maps),
+    maps,
     whatsapp: validWhatsapp ? `https://api.whatsapp.com/send/?phone=${encodeURIComponent(`+${phone}`)}&text=${encodeURIComponent(outreachMessage(lead))}` : null,
     email: lead.contact_email ? `mailto:${encodeURIComponent(lead.contact_email)}?subject=${encodeURIComponent(`Automação para ${leadName(lead)}`)}&body=${encodeURIComponent(outreachMessage(lead))}` : null
   };
@@ -111,8 +115,9 @@ function leadRow(lead) {
   const contact = lead.contact_name || lead.contact_whatsapp || lead.contact_phone || lead.contact_email || 'Não localizado';
   const contactSub = lead.contact_name ? (lead.contact_role || lead.contact_email || '') : (lead.contact_email || '');
   const opportunity = lead.opportunity_type || 'Oportunidade em aberto';
+  const sourceLabel = lead.website_url || (lead.lead_type === 'school' ? `INEP ${String(lead.external_id || '').replace('inep:', '')}` : lead.domain);
   return `<tr>
-    <td><div class="company-cell"><span class="company-avatar">${escapeHtml(name.charAt(0).toUpperCase())}</span><div><strong title="${escapeHtml(name)}">${escapeHtml(name)}</strong><a href="${links.site}" target="_blank" rel="noopener">${escapeHtml(lead.domain)}</a></div></div></td>
+    <td><div class="company-cell"><span class="company-avatar">${escapeHtml(name.charAt(0).toUpperCase())}</span><div><strong title="${escapeHtml(name)}">${escapeHtml(name)}</strong><a href="${links.site}" target="_blank" rel="noopener">${escapeHtml(sourceLabel)}</a></div></div></td>
     <td><div class="potential"><span class="score">${leadScore(lead)}</span><span class="temperature ${escapeHtml(lead.temperature || 'cold')}">${escapeHtml(temperatureLabels[lead.temperature] || 'Sem nota')}</span></div></td>
     <td><div class="technology"><strong>${escapeHtml(lead.crm || 'Não detectado')}</strong><small>${escapeHtml(opportunity)} · ${escapeHtml(lead.location || lead.sector || 'Local não informado')}</small></div></td>
     <td><div class="contact-cell"><strong>${escapeHtml(contact)}</strong><small>${escapeHtml(contactSub)}</small></div></td>
@@ -141,7 +146,7 @@ function openDrawer(id) {
   state.selectedId = lead.id;
   const links = contactLinks(lead);
   byId('drawerTitle').textContent = leadName(lead);
-  byId('drawerDomain').textContent = lead.domain;
+  byId('drawerDomain').textContent = lead.website_url || (lead.lead_type === 'school' ? `Código ${lead.external_id || 'INEP'}` : lead.domain);
   byId('drawerDomain').href = links.site;
   const reasons = Array.isArray(lead.score_reasons) ? lead.score_reasons : [];
   byId('drawerContent').innerHTML = `<div class="drawer-score"><div class="drawer-pill"><span>Potencial</span><strong>${leadScore(lead)}/100</strong></div><div class="drawer-pill"><span>Temperatura</span><strong>${escapeHtml(temperatureLabels[lead.temperature] || 'Sem nota')}</strong></div><div class="drawer-pill"><span>Status</span><strong>${escapeHtml(statusLabels[lead.status] || lead.status || 'Novo')}</strong></div><div class="drawer-pill"><span>Tipo</span><strong>${escapeHtml(lead.opportunity_type || 'Consultivo')}</strong></div></div>

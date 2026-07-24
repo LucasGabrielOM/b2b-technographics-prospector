@@ -197,6 +197,40 @@ def calculate_lead_score(lead: Lead) -> tuple[int, str, list[str]]:
 
 
 def refresh_lead_score(lead: Lead) -> None:
+    if getattr(lead, "lead_type", "company") == "school":
+        score = 35
+        reasons = [
+            "+35: escola privada ativa confirmada no Censo Escolar INEP 2025",
+            f"Fonte oficial: {getattr(lead, 'discovery_source', None) or 'Censo Escolar INEP 2025'}",
+        ]
+        evidence = getattr(lead, "evidence", None) or []
+        registry = next((item for item in evidence if item.get("type") == "public_company_registry"), None)
+        if getattr(lead, "contact_phone", None) or getattr(lead, "contact_whatsapp", None):
+            score += 15
+            reasons.append("+15: telefone público da escola disponível")
+        if getattr(lead, "contact_email", None):
+            score += 10
+            reasons.append("+10: e-mail cadastral público disponível")
+        if getattr(lead, "contact_name", None):
+            score += 10
+            reasons.append(f"+10: responsável identificado ({lead.contact_name})")
+        if registry and registry.get("active"):
+            score += 10
+            reasons.append("+10: CNPJ confirmado como ativo em fonte pública")
+        if getattr(lead, "registration_number", None):
+            score += 5
+            reasons.append("+5: CNPJ da escola/mantenedora disponível")
+        notes = getattr(lead, "notes", None) or ""
+        if "Etapas:" in notes:
+            score += 5
+            reasons.append("+5: etapas de ensino identificadas")
+        lead.lead_score = min(100, score)
+        has_contact = bool(lead.contact_phone or lead.contact_whatsapp or lead.contact_email)
+        lead.temperature = "hot" if lead.lead_score >= 70 and has_contact else "warm" if lead.lead_score >= 50 else "cold"
+        reasons.append("Qualificação: aderência ao público-alvo de escolas particulares; não representa intenção de compra confirmada.")
+        lead.score_reasons = reasons
+        return
+
     technology_score, _, reasons = calculate_lead_score(lead)
     pain_score = int(getattr(lead, "pain_score", 0) or 0)
     opportunity_type = (getattr(lead, "opportunity_type", None) or "").strip()

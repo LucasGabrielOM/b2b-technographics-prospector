@@ -32,6 +32,10 @@ def ensure_lead_contact_columns() -> None:
             if name not in existing:
                 connection.execute(text(f"ALTER TABLE leads ADD COLUMN {name} VARCHAR(40)"))
         additions = {
+            "lead_type": "VARCHAR(40) DEFAULT 'company'",
+            "external_id": "VARCHAR(120)",
+            "registration_number": "VARCHAR(40)",
+            "website_url": "VARCHAR(500)",
             "location": "VARCHAR(160)",
             "discovery_source": "VARCHAR(500)",
             "opportunity_type": "VARCHAR(120)",
@@ -45,6 +49,9 @@ def ensure_lead_contact_columns() -> None:
         for name, sql_type in additions.items():
             if name not in existing:
                 connection.execute(text(f"ALTER TABLE leads ADD COLUMN {name} {sql_type}"))
+        connection.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_leads_external_id ON leads (external_id)"))
+        connection.execute(text("CREATE INDEX IF NOT EXISTS ix_leads_lead_type ON leads (lead_type)"))
+        connection.execute(text("CREATE INDEX IF NOT EXISTS ix_leads_registration_number ON leads (registration_number)"))
 
 
 def get_db():

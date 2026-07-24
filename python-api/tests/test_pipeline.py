@@ -233,3 +233,77 @@ def test_autonomous_prospecting_does_not_return_existing_leads_as_new(client, mo
     monkeypatch.setattr("app.main.discover_businesses", no_new_discovery)
     fallback = client.post("/api/v1/prospect/run", json={"limit": 4, "min_score": 45, "include_complaints": False, "only_new": True}).json()
     assert fallback == []
+
+
+def test_school_prospecting_returns_active_private_contacts_without_duplicates(client, monkeypatch):
+    async def fake_enrich(schools, settings, limit):
+        enriched = []
+        for index, school in enumerate(schools):
+            if index < limit:
+                enriched.append({
+                    **school,
+                    "registry_checked": True,
+                    "registry_active": True,
+                    "registry_status": "ATIVA",
+                    "contact_name": "Responsavel Escolar",
+                    "contact_role": "Socio-Administrador",
+                    "contact_email": "contato@escola.com.br",
+                })
+            else:
+                enriched.append({**school, "registry_checked": False})
+        return enriched
+
+    monkeypatch.setattr("app.main.enrich_school_batch", fake_enrich)
+    payload = {
+        "limit": 100,
+        "require_phone": True,
+        "private_category": "1",
+        "only_new": True,
+        "enrich_cnpj_limit": 12,
+    }
+    first = client.post("/api/v1/schools/run", json=payload)
+    assert first.status_code == 200
+    first_leads = first.json()
+    assert len(first_leads) == 100
+    assert len({lead["external_id"] for lead in first_leads}) == 100
+    assert all(lead["lead_type"] == "school" for lead in first_leads)
+    assert all(lead["contact_phone"] for lead in first_leads)
+    assert all(lead["sector"] == "educacao privada" for lead in first_leads)
+    assert all(any("INEP 2025" in reason for reason in lead["score_reasons"]) for lead in first_leads)
+    assert any(lead["temperature"] == "hot" for lead in first_leads)
+
+    second_leads = client.post("/api/v1/schools/run", json=payload).json()
+    assert len(second_leads) == 100
+    assert {lead["external_id"] for lead in first_leads}.isdisjoint(
+        {lead["external_id"] for lead in second_leads}
+    )
+
+
+def test_school_prospecting_filters_state_and_skips_inactive_cnpj(client, monkeypatch):
+    async def fake_enrich(schools, settings, limit):
+        return [
+            {
+                **school,
+                "registry_checked": index == 0,
+                "registry_active": index != 0,
+                "registry_status": "BAIXADA" if index == 0 else None,
+            }
+            for index, school in enumerate(schools)
+        ]
+
+    monkeypatch.setattr("app.main.enrich_school_batch", fake_enrich)
+    response = client.post("/api/v1/schools/run", json={
+        "states": ["SC"],
+        "limit": 20,
+        "require_phone": True,
+        "private_category": "1",
+        "enrich_cnpj_limit": 1,
+    })
+    assert response.status_code == 200
+    leads = response.json()
+    assert len(leads) == 20
+    assert all(lead["location"].endswith("/SC") for lead in leads)
+    assert all(
+        not any(item.get("status") == "BAIXADA" for item in lead["evidence"])
+        for lead in leads
+    )

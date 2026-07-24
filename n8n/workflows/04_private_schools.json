@@ -1,0 +1,106 @@
+{
+  "name": "B2B 04 - 100 escolas particulares novas por dia",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "school-manual-trigger",
+      "name": "Testar agora",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [220, 220]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "days",
+              "daysInterval": 1,
+              "triggerAtHour": 8
+            }
+          ]
+        }
+      },
+      "id": "school-daily-trigger",
+      "name": "Executar diariamente",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [220, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{json:{states:[],cities:[],limit:100,require_phone:true,private_category:'1',only_new:true,enrich_cnpj_limit:12}}];"
+      },
+      "id": "school-search-criteria",
+      "name": "Configurar escolas do Brasil",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [470, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://b2b-technographics-prospector.onrender.com/api/v1/schools/run",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json }}",
+        "options": {
+          "timeout": 45000
+        }
+      },
+      "id": "school-prospecting",
+      "name": "Buscar 100 escolas ativas sem repetir",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [750, 300],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 3000,
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const incoming=$input.all().flatMap(item=>Array.isArray(item.json)?item.json:[item.json]);const errors=incoming.filter(item=>item&&(item.error||item.message)&&!item.id);const raw=incoming.filter(item=>item&&item.id&&item.lead_type==='school'&&item.status!=='suppressed');if(!raw.length){return[{json:{diagnostic:true,status:'sem_escolas_novas',message:errors[0]?.message||'A API nao retornou escolas novas neste lote.',reason:'Confirme se o Render terminou o deploy. Se uma UF/cidade foi filtrada, ela pode ja ter sido esgotada; com states e cities vazios a busca cobre todo o Brasil.'}}];}const unique=new Map();for(const lead of raw){const key=lead.external_id||lead.registration_number||`${lead.company_name}:${lead.location}`;const current=unique.get(key);if(!current||Number(lead.lead_score||0)>Number(current.lead_score||0))unique.set(key,lead);}const leads=[...unique.values()].sort((a,b)=>Number(b.lead_score||0)-Number(a.lead_score||0));return leads.slice(0,100).map((lead,index)=>({json:{priority:index+1,...lead,lead_quality:lead.temperature||'warm',qualification_summary:`Escola particular ativa no Censo Escolar INEP 2025${lead.contact_name?', responsavel identificado':''}${lead.contact_email?', e-mail publico disponível':''}${lead.contact_phone?', telefone publico disponivel':''}.`,qualification_source:lead.discovery_source||lead.evidence?.[0]?.source}}));"
+      },
+      "id": "school-rank",
+      "name": "Organizar e explicar qualificacao",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1030, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.all().map(item=>{const lead=item.json;if(lead.diagnostic)return{json:{...lead,recommended_channel:'nenhum',outreach_message:lead.message,send_status:'sem mensagem gerada'}};const school=lead.company_name||'escola';const firstName=lead.contact_name?` ${lead.contact_name.split(' ')[0]}`:'';const message=`Ola${firstName}! Sou Lucas Gabriel, da equipe de projetos. Trabalhamos com solucoes SaaS e automacao para instituicoes de ensino, reduzindo tarefas manuais e organizando atendimento e processos. Gostaria de entender como a ${school} faz essa gestao hoje. Posso falar com a pessoa responsavel por tecnologia ou administracao?`;const digits=String(lead.contact_whatsapp||'').replace(/\\D/g,'');const whatsapp_link=digits.length>=12&&!digits.includes('0800')?`https://api.whatsapp.com/send/?phone=${encodeURIComponent('+'+digits)}&text=${encodeURIComponent(message)}`:null;const subject=`Tecnologia e automacao para ${school}`;const email_link=lead.contact_email?`mailto:${lead.contact_email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(message)}`:null;const maps_link=`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${school} ${lead.location||''}`)}`;return{json:{...lead,recommended_channel:whatsapp_link?'WhatsApp':email_link?'E-mail':lead.contact_phone?'Telefone':'Google Maps',outreach_message:message,whatsapp_link,email_subject:subject,email_link,maps_link,send_status:'mensagem pronta para revisao'}};});"
+      },
+      "id": "school-outreach",
+      "name": "Preparar contato e mensagem",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1310, 300]
+    }
+  ],
+  "connections": {
+    "Testar agora": {
+      "main": [[{"node": "Configurar escolas do Brasil", "type": "main", "index": 0}]]
+    },
+    "Executar diariamente": {
+      "main": [[{"node": "Configurar escolas do Brasil", "type": "main", "index": 0}]]
+    },
+    "Configurar escolas do Brasil": {
+      "main": [[{"node": "Buscar 100 escolas ativas sem repetir", "type": "main", "index": 0}]]
+    },
+    "Buscar 100 escolas ativas sem repetir": {
+      "main": [[{"node": "Organizar e explicar qualificacao", "type": "main", "index": 0}]]
+    },
+    "Organizar e explicar qualificacao": {
+      "main": [[{"node": "Preparar contato e mensagem", "type": "main", "index": 0}]]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Sao_Paulo"
+  },
+  "active": false,
+  "versionId": "e07420ca-fc4c-4ae3-a780-0f77a32fca04"
+}

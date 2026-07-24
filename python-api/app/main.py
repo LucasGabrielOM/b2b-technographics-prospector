@@ -14,7 +14,8 @@ from .config import Settings, get_settings
 from .database import Base, engine, ensure_lead_contact_columns, get_db
 from .models import Lead, LeadStatus
 from .prospecting import discover_businesses, map_complaints
-from .schemas import DiscoveryRequest, GenerateRequest, LeadOut, LeadPatch, MarkContactedRequest, ProspectRequest, SuppressRequest
+from .schemas import DiscoveryRequest, GenerateRequest, LeadOut, LeadPatch, MarkContactedRequest, ProspectRequest, SchoolProspectRequest, SuppressRequest
+from .school_prospecting import INEP_SOURCE_URL, enrich_school_batch, school_evidence, select_schools
 from .services import dispatch, enrich_with_hunter, generate_draft, is_business_email, refresh_lead_score, scan_domain
 
 Base.metadata.create_all(bind=engine)
@@ -227,10 +228,80 @@ async def run_prospecting(
     return result[:payload.limit]
 
 
+@app.post("/api/v1/schools/run", response_model=list[LeadOut])
+async def run_school_prospecting(
+    payload: SchoolProspectRequest,
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+):
+    """Return a fast, deduplicated batch of active private schools from INEP."""
+    existing_external_ids: set[str] = set()
+    if payload.only_new:
+        existing_external_ids = {
+            value for value in db.scalars(
+                select(Lead.external_id).where(Lead.external_id.is_not(None))
+            ) if value
+        }
+    candidates = select_schools(
+        existing_external_ids=existing_external_ids,
+        states=payload.states,
+        cities=payload.cities,
+        private_category=payload.private_category,
+        require_phone=payload.require_phone,
+        limit=min(180, payload.limit + payload.enrich_cnpj_limit),
+    )
+    if not candidates:
+        return []
+    candidates = await enrich_school_batch(candidates, settings, payload.enrich_cnpj_limit)
+    result: list[Lead] = []
+    for school in candidates:
+        if school.get("registry_checked") and not school.get("registry_active"):
+            continue
+        external_id = f"inep:{school['school_code']}"
+        lead = db.scalar(select(Lead).where(Lead.external_id == external_id))
+        if lead is None:
+            lead = db.scalar(select(Lead).where(Lead.domain == f"inep-{school['school_code']}.school"))
+        if lead is None:
+            lead = Lead(domain=f"inep-{school['school_code']}.school", external_id=external_id)
+            db.add(lead)
+        lead.lead_type = "school"
+        lead.external_id = external_id
+        lead.registration_number = school.get("cnpj")
+        lead.company_name = school["school_name"]
+        lead.location = f"{school['city']}/{school['state']}"
+        lead.sector = "educacao privada"
+        lead.company_size = school.get("company_size") or lead.company_size
+        lead.opportunity_type = "licenca SaaS e automacao para escola"
+        lead.discovery_source = INEP_SOURCE_URL
+        lead.crm = None
+        lead.confidence = 0.0
+        lead.evidence = school_evidence(school)
+        lead.pain_score = 0
+        lead.pain_summary = None
+        lead.pain_source = None
+        lead.contact_name = school.get("contact_name") or lead.contact_name
+        lead.contact_role = school.get("contact_role") or lead.contact_role
+        lead.contact_email = school.get("contact_email") or lead.contact_email
+        lead.contact_phone = school.get("contact_phone") or school.get("phone") or lead.contact_phone
+        stages = ", ".join(school.get("stages") or []) or "não informadas"
+        lead.notes = (
+            f"Endereço: {school.get('address') or 'não informado'}. "
+            f"Etapas: {stages}. Código INEP: {school['school_code']}."
+        )
+        refresh_lead_score(lead)
+        result.append(lead)
+        if len(result) >= payload.limit:
+            break
+    db.commit()
+    result.sort(key=lambda lead: (lead.lead_score, bool(lead.contact_email), bool(lead.contact_name)), reverse=True)
+    return result
+
+
 @app.get("/api/v1/leads", response_model=list[LeadOut])
 def list_leads(
     status: str | None = Query(default=None),
     temperature: str | None = Query(default=None),
+    lead_type: str | None = Query(default=None),
     q: str | None = Query(default=None, max_length=100),
     limit: int = Query(default=500, ge=1, le=1000),
     db: Session = Depends(get_db),
@@ -240,6 +311,8 @@ def list_leads(
         query = query.where(Lead.status == status)
     if temperature:
         query = query.where(Lead.temperature == temperature)
+    if lead_type:
+        query = query.where(Lead.lead_type == lead_type)
     if q:
         term = f"%{q.strip()}%"
         query = query.where(or_(Lead.company_name.ilike(term), Lead.domain.ilike(term), Lead.crm.ilike(term), Lead.opportunity_type.ilike(term), Lead.location.ilike(term)))

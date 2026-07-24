@@ -32,6 +32,26 @@ class ProspectRequest(BaseModel):
     only_new: bool = True
 
 
+class SchoolProspectRequest(BaseModel):
+    states: list[str] = Field(default_factory=list, max_length=27)
+    cities: list[str] = Field(default_factory=list, max_length=100)
+    limit: int = Field(default=100, ge=1, le=150)
+    require_phone: bool = True
+    private_category: str = Field(default="1", pattern="^(1|2|3|4|all)$")
+    only_new: bool = True
+    enrich_cnpj_limit: int = Field(default=12, ge=0, le=30)
+
+    @field_validator("states")
+    @classmethod
+    def normalize_states(cls, values: list[str]) -> list[str]:
+        return list(dict.fromkeys(value.strip().upper() for value in values if value.strip()))
+
+    @field_validator("cities")
+    @classmethod
+    def normalize_cities(cls, values: list[str]) -> list[str]:
+        return list(dict.fromkeys(value.strip() for value in values if value.strip()))
+
+
 class LeadPatch(BaseModel):
     company_name: str | None = None
     sector: str | None = None
@@ -64,6 +84,10 @@ class LeadOut(BaseModel):
     id: int
     company_name: str | None
     domain: str
+    lead_type: str
+    external_id: str | None
+    registration_number: str | None
+    website_url: str | None
     sector: str | None
     company_size: str | None
     opportunity_type: str | None

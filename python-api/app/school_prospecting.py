@@ -1,0 +1,177 @@
+from __future__ import annotations
+
+import asyncio
+import gzip
+import hashlib
+import json
+import re
+import unicodedata
+from functools import lru_cache
+from pathlib import Path
+
+import httpx
+
+from .config import Settings
+
+
+CATALOG_PATH = Path(__file__).parent / "data" / "private_schools_2025.jsonl.gz"
+INEP_SOURCE_URL = "https://www.gov.br/inep/pt-br/acesso-a-informacao/dados-abertos/microdados/censo-escolar"
+PRIVATE_CATEGORY_LABELS = {
+    "1": "particular",
+    "2": "comunitaria",
+    "3": "confessional",
+    "4": "filantropica",
+}
+
+
+def _ascii(value: str | None) -> str:
+    normalized = unicodedata.normalize("NFKD", value or "")
+    return normalized.encode("ascii", "ignore").decode("ascii").casefold().strip()
+
+
+def _digits(value: str | None) -> str:
+    return re.sub(r"\D", "", value or "")
+
+
+def _phone(value: str | None) -> str | None:
+    digits = _digits(value)
+    if digits.startswith("55") and len(digits) in {12, 13}:
+        return f"+{digits}"
+    if len(digits) in {10, 11}:
+        return f"+55{digits}"
+    return None
+
+
+def _email(value: str | None) -> str | None:
+    candidate = (value or "").strip().lower()
+    return candidate if "@" in candidate and "." in candidate.rsplit("@", 1)[-1] else None
+
+
+@lru_cache(maxsize=1)
+def load_school_catalog() -> tuple[dict, ...]:
+    with gzip.open(CATALOG_PATH, "rt", encoding="utf-8") as source:
+        schools = [json.loads(line) for line in source if line.strip()]
+    # Hash ordering distributes each daily batch across Brazil instead of
+    # exhausting one state before moving to the next.
+    schools.sort(key=lambda item: hashlib.sha1(item["school_code"].encode()).hexdigest())
+    return tuple(schools)
+
+
+def select_schools(
+    *,
+    existing_external_ids: set[str],
+    states: list[str],
+    cities: list[str],
+    private_category: str,
+    require_phone: bool,
+    limit: int,
+) -> list[dict]:
+    wanted_states = {state.upper() for state in states}
+    wanted_cities = {_ascii(city) for city in cities}
+    selected: list[dict] = []
+    for school in load_school_catalog():
+        external_id = f"inep:{school['school_code']}"
+        if external_id in existing_external_ids:
+            continue
+        if wanted_states and school["state"].upper() not in wanted_states:
+            continue
+        if wanted_cities and _ascii(school["city"]) not in wanted_cities:
+            continue
+        if private_category != "all" and school["private_category"] != private_category:
+            continue
+        if require_phone and not school.get("phone"):
+            continue
+        selected.append(dict(school))
+        if len(selected) >= limit:
+            break
+    return selected
+
+
+def _best_responsible(qsa: list[dict]) -> tuple[str | None, str | None]:
+    priorities = ("administrador", "presidente", "titular", "diretor", "socio")
+    candidates = []
+    for person in qsa or []:
+        name = (person.get("nome_socio") or "").strip()
+        role = (person.get("qualificacao_socio") or "").strip()
+        if not name:
+            continue
+        normalized_role = _ascii(role)
+        priority = next((index for index, term in enumerate(priorities) if term in normalized_role), len(priorities))
+        candidates.append((priority, name, role))
+    if not candidates:
+        return None, None
+    _, name, role = min(candidates)
+    return name.title(), role or None
+
+
+async def fetch_cnpj(cnpj: str, settings: Settings) -> dict:
+    timeout = min(6.0, max(3.0, float(settings.request_timeout_seconds)))
+    try:
+        async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
+            response = await client.get(f"https://brasilapi.com.br/api/cnpj/v1/{cnpj}")
+            response.raise_for_status()
+        payload = response.json()
+    except (httpx.HTTPError, ValueError, TypeError):
+        return {"registry_checked": False}
+    responsible, role = _best_responsible(payload.get("qsa") or [])
+    status = _ascii(payload.get("descricao_situacao_cadastral"))
+    return {
+        "registry_checked": True,
+        "registry_active": status == "ativa",
+        "registry_status": payload.get("descricao_situacao_cadastral"),
+        "contact_email": _email(payload.get("email")),
+        "contact_phone": _phone(payload.get("ddd_telefone_1")) or _phone(payload.get("ddd_telefone_2")),
+        "contact_name": responsible,
+        "contact_role": role,
+        "company_size": payload.get("porte"),
+        "legal_name": payload.get("razao_social"),
+        "trade_name": payload.get("nome_fantasia"),
+        "primary_activity": payload.get("cnae_fiscal_descricao"),
+    }
+
+
+async def enrich_school_batch(schools: list[dict], settings: Settings, limit: int) -> list[dict]:
+    if limit <= 0:
+        return schools
+    semaphore = asyncio.Semaphore(6)
+    targets = [school for school in schools if school.get("cnpj")][:limit]
+
+    async def enrich(school: dict) -> tuple[str, dict]:
+        async with semaphore:
+            result = await fetch_cnpj(school["cnpj"], settings)
+        return school["school_code"], result
+
+    tasks = [asyncio.create_task(enrich(school)) for school in targets]
+    done, pending = await asyncio.wait(tasks, timeout=14)
+    for task in pending:
+        task.cancel()
+    results: dict[str, dict] = {}
+    for task in done:
+        try:
+            code, result = task.result()
+            results[code] = result
+        except Exception:
+            continue
+    return [{**school, **results.get(school["school_code"], {"registry_checked": False})} for school in schools]
+
+
+def school_evidence(school: dict) -> list[dict]:
+    evidence = [{
+        "source": INEP_SOURCE_URL,
+        "technology": "Censo Escolar INEP 2025",
+        "type": "official_school_registry",
+        "school_code": school["school_code"],
+        "active": True,
+        "administrative_category": "privada",
+        "private_category": PRIVATE_CATEGORY_LABELS.get(school["private_category"], school["private_category"]),
+        "census_year": school["census_year"],
+    }]
+    if school.get("registry_checked"):
+        evidence.append({
+            "source": f"https://brasilapi.com.br/api/cnpj/v1/{school['cnpj']}",
+            "technology": "Cadastro Nacional da Pessoa Juridica",
+            "type": "public_company_registry",
+            "active": bool(school.get("registry_active")),
+            "status": school.get("registry_status"),
+        })
+    return evidence
