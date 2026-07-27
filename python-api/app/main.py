@@ -13,9 +13,10 @@ from sqlalchemy.orm import Session
 from .auth import SESSION_COOKIE, authenticate, create_session_token, hash_password, portal_settings, require_portal_admin, require_portal_user
 from .config import Settings, get_settings
 from .database import Base, engine, ensure_lead_contact_columns, get_db
+from .google_places import GooglePlacesError, search_google_places
 from .models import Lead, LeadStatus, PortalUser
 from .prospecting import discover_businesses, map_complaints
-from .schemas import DiscoveryRequest, GenerateRequest, LeadOut, LeadPatch, MarkContactedRequest, PortalPasswordReset, PortalUserCreate, PortalUserOut, PortalUserPatch, ProspectRequest, SchoolProspectRequest, SuppressRequest
+from .schemas import DiscoveryRequest, GenerateRequest, GooglePlacesPreviewRequest, LeadOut, LeadPatch, MarkContactedRequest, PortalPasswordReset, PortalUserCreate, PortalUserOut, PortalUserPatch, ProspectingRunRequest, ProspectRequest, SchoolProspectRequest, SuppressRequest
 from .school_prospecting import INEP_SOURCE_URL, enrich_school_batch, school_evidence, select_schools
 from .services import dispatch, enrich_with_hunter, generate_draft, is_business_email, refresh_lead_score, scan_domain
 
@@ -90,6 +91,17 @@ def leads_page(request: Request, settings: Settings = Depends(get_settings)):
     except HTTPException:
         return RedirectResponse(url="/login?next=/leads", status_code=302)
     return FileResponse(STATIC_DIR / "leads.html")
+
+
+@app.get("/prospecting", include_in_schema=False)
+def prospecting_page(request: Request, settings: Settings = Depends(get_settings)):
+    try:
+        require_portal_admin(request, settings)
+    except HTTPException as exc:
+        if exc.status_code == 401:
+            return RedirectResponse(url="/login?next=/prospecting", status_code=302)
+        return RedirectResponse(url="/dashboard", status_code=302)
+    return FileResponse(STATIC_DIR / "prospecting.html")
 
 
 @app.get("/api/v1/auth/me")
@@ -197,6 +209,103 @@ def reset_portal_user_password(
     user.password_hash = hash_password(payload.password)
     db.commit()
     return {"status": "ok"}
+
+
+@app.get("/api/v1/prospecting/config")
+def prospecting_config(
+    request: Request,
+    settings: Settings = Depends(get_settings),
+):
+    require_portal_admin(request, settings)
+    return {
+        "google_maps_configured": bool((settings.google_maps_api_key or "").strip()),
+        "google_maps_key_exposed": False,
+        "google_maps_pricing": {
+            "credit_model": "free_usage_caps",
+            "credit_changed_on": "2025-03-01",
+            "text_search_pro_free_monthly_events": 5_000,
+            "text_search_enterprise_free_monthly_events": 1_000,
+            "text_search_atmosphere_free_monthly_events": 1_000,
+            "currency": "USD",
+            "pricing_url": "https://developers.google.com/maps/billing-and-pricing/pricing",
+        },
+        "review_limit": 5,
+        "review_order": "relevância",
+    }
+
+
+@app.post("/api/v1/prospecting/run")
+async def run_from_portal(
+    request: Request,
+    payload: ProspectingRunRequest,
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+):
+    identity = require_portal_admin(request, settings)
+    started_at = datetime.now(timezone.utc)
+    if payload.audience == "schools":
+        leads = await run_school_prospecting(
+            SchoolProspectRequest(
+                states=payload.states,
+                cities=payload.cities,
+                limit=payload.limit,
+                require_phone=payload.require_phone,
+                private_category="1",
+                only_new=payload.only_new,
+                enrich_cnpj_limit=payload.enrich_cnpj_limit,
+            ),
+            db,
+            settings,
+        )
+    else:
+        leads = await run_prospecting(
+            ProspectRequest(
+                city=payload.city,
+                state=payload.state,
+                segments=payload.segments,
+                limit=payload.limit,
+                target_contacts=payload.limit,
+                min_score=payload.min_score,
+                include_complaints=payload.include_complaints,
+                only_new=payload.only_new,
+            ),
+            db,
+            settings,
+        )
+    serialized = [
+        LeadOut.model_validate(lead).model_dump(mode="json")
+        for lead in leads
+    ]
+    return {
+        "status": "completed",
+        "audience": payload.audience,
+        "created_count": len(serialized),
+        "requested_limit": payload.limit,
+        "only_new": payload.only_new,
+        "started_by": identity.username,
+        "started_at": started_at.isoformat(),
+        "finished_at": datetime.now(timezone.utc).isoformat(),
+        "leads": serialized,
+    }
+
+
+@app.post("/api/v1/google-places/preview")
+async def google_places_preview(
+    request: Request,
+    payload: GooglePlacesPreviewRequest,
+    settings: Settings = Depends(get_settings),
+):
+    require_portal_admin(request, settings)
+    try:
+        return await search_google_places(
+            payload.query,
+            settings,
+            limit=payload.limit,
+            include_contacts=payload.include_contacts,
+            include_reviews=payload.include_reviews,
+        )
+    except GooglePlacesError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @app.post("/api/v1/leads/discover", response_model=list[LeadOut])

@@ -52,6 +52,52 @@ class SchoolProspectRequest(BaseModel):
         return list(dict.fromkeys(value.strip() for value in values if value.strip()))
 
 
+class ProspectingRunRequest(BaseModel):
+    audience: str = Field(pattern="^(schools|companies)$")
+    states: list[str] = Field(default_factory=list, max_length=27)
+    cities: list[str] = Field(default_factory=list, max_length=100)
+    state: str = Field(default="Santa Catarina", min_length=2, max_length=100)
+    city: str = Field(default="Florianópolis", min_length=2, max_length=100)
+    segments: list[str] = Field(
+        default_factory=lambda: ["imobiliaria", "concessionaria", "clinica", "loja"],
+        min_length=1,
+        max_length=12,
+    )
+    limit: int = Field(default=50, ge=1, le=100)
+    only_new: bool = True
+    require_phone: bool = True
+    enrich_cnpj_limit: int = Field(default=12, ge=0, le=40)
+    min_score: int = Field(default=45, ge=0, le=100)
+    include_complaints: bool = False
+
+    @field_validator("states")
+    @classmethod
+    def normalize_run_states(cls, values: list[str]) -> list[str]:
+        return list(dict.fromkeys(value.strip().upper() for value in values if value.strip()))
+
+    @field_validator("cities")
+    @classmethod
+    def normalize_run_cities(cls, values: list[str]) -> list[str]:
+        return list(dict.fromkeys(value.strip() for value in values if value.strip()))
+
+    @field_validator("segments")
+    @classmethod
+    def normalize_run_segments(cls, values: list[str]) -> list[str]:
+        return list(dict.fromkeys(value.strip().lower() for value in values if value.strip()))
+
+
+class GooglePlacesPreviewRequest(BaseModel):
+    query: str = Field(min_length=3, max_length=200)
+    limit: int = Field(default=10, ge=1, le=20)
+    include_contacts: bool = False
+    include_reviews: bool = False
+
+    @field_validator("query")
+    @classmethod
+    def normalize_maps_query(cls, value: str) -> str:
+        return " ".join(value.split())
+
+
 class PortalUserCreate(BaseModel):
     username: str = Field(min_length=3, max_length=80, pattern=r"^[a-zA-Z0-9._-]+$")
     display_name: str = Field(min_length=2, max_length=160)

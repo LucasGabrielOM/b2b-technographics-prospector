@@ -143,6 +143,44 @@ exemplo `"states": ["SC", "PR"]`. O telefone do INEP não é tratado
 automaticamente como WhatsApp; o sistema só cria link de WhatsApp quando esse
 canal estiver confirmado.
 
+## Página para iniciar a prospecção
+
+O administrador pode abrir `/prospecting` e iniciar uma coleta sem entrar no
+n8n ou no Swagger. A página permite:
+
+- pesquisar escolas particulares por estado e cidade usando o INEP 2025;
+- pesquisar empresas por cidade, estado e segmentos;
+- escolher o volume e os critérios mínimos;
+- manter `only_new=true`, evitando leads repetidos;
+- acompanhar a execução e abrir os resultados na central de leads;
+- testar a Places API (New) do Google Maps sem expor a chave no navegador.
+
+Para habilitar o laboratório do Google Maps, ative a **Places API (New)** no
+Google Cloud, crie uma chave restrita à API e configure no servidor:
+
+```text
+GOOGLE_MAPS_API_KEY=sua-chave-restrita
+```
+
+No Render, adicione a variável no serviço da API em **Environment**. A chave
+fica somente no backend; o endpoint de configuração informa apenas se ela está
+presente.
+
+O crédito fixo mensal de US$ 200 foi substituído em 1º de março de 2025 por
+franquias mensais específicas para cada SKU. No modo de teste atual:
+
+- Text Search Pro, sem telefone/site: 5.000 eventos gratuitos por mês;
+- Text Search Enterprise, com telefone/site: 1.000 eventos gratuitos por mês;
+- Text Search Enterprise + Atmosphere, com avaliações: 1.000 eventos gratuitos
+  por mês.
+
+Os valores e limites podem mudar. Consulte sempre a
+[tabela oficial](https://developers.google.com/maps/billing-and-pricing/pricing),
+configure alertas de orçamento e limite as cotas no Google Cloud. A API nova
+retorna no máximo cinco avaliações por local, ordenadas por relevância, não
+necessariamente as mais recentes. O laboratório apenas exibe essa amostra e
+não a grava permanentemente no banco.
+
 ## Primeiro teste
 
 1. Abra o workflow **B2B 01 - Descoberta de technographics**.

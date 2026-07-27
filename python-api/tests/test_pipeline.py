@@ -3,6 +3,7 @@ def test_health(client):
     assert client.get("/login").status_code == 200
     assert client.get("/dashboard", follow_redirects=False).status_code == 302
     assert client.get("/leads", follow_redirects=False).status_code == 302
+    assert client.get("/prospecting", follow_redirects=False).status_code == 302
     login = client.post("/api/v1/auth/login", json={"username": "admin", "password": "demo1234"})
     assert login.status_code == 200
     assert login.json()["role"] == "admin"
@@ -13,6 +14,13 @@ def test_health(client):
     leads_page = client.get("/leads")
     assert leads_page.status_code == 200
     assert "Central de leads" in leads_page.text
+    prospecting_page = client.get("/prospecting")
+    assert prospecting_page.status_code == 200
+    assert "Iniciar prospecção" in prospecting_page.text
+    config = client.get("/api/v1/prospecting/config")
+    assert config.status_code == 200
+    assert config.json()["google_maps_key_exposed"] is False
+    assert config.json()["google_maps_pricing"]["text_search_pro_free_monthly_events"] == 5000
     assert client.get("/docs").status_code == 200
 
 
@@ -39,8 +47,66 @@ def test_admin_creates_user_with_restricted_session(client):
     assert login.json()["is_admin"] is False
     assert client.get("/dashboard").status_code == 200
     assert client.get("/leads").status_code == 200
+    assert client.get("/prospecting", follow_redirects=False).headers["location"] == "/dashboard"
+    assert client.get("/api/v1/prospecting/config").status_code == 403
+    assert client.post("/api/v1/prospecting/run", json={
+        "audience": "schools",
+        "limit": 1,
+        "segments": ["educacao"],
+    }).status_code == 403
     assert client.get("/api/v1/admin/users").status_code == 403
     assert client.get("/docs").status_code == 403
+
+
+def test_portal_starts_school_prospecting_and_previews_google_maps(client, monkeypatch):
+    assert client.post("/api/v1/auth/login", json={
+        "username": "admin",
+        "password": "demo1234",
+    }).status_code == 200
+
+    run = client.post("/api/v1/prospecting/run", json={
+        "audience": "schools",
+        "states": ["SC"],
+        "limit": 2,
+        "require_phone": True,
+        "enrich_cnpj_limit": 0,
+        "segments": ["educacao"],
+    })
+    assert run.status_code == 200
+    result = run.json()
+    assert result["status"] == "completed"
+    assert result["audience"] == "schools"
+    assert result["created_count"] == 2
+    assert all(lead["lead_type"] == "school" for lead in result["leads"])
+
+    async def fake_google_search(query, settings, *, limit, include_contacts, include_reviews):
+        assert query == "escolas particulares em Florianópolis SC"
+        assert include_contacts is True
+        assert include_reviews is True
+        return {
+            "query": query,
+            "sku": "Text Search Enterprise + Atmosphere",
+            "free_monthly_events": 1000,
+            "review_order": "relevância",
+            "places": [{
+                "place_id": "place-1",
+                "name": "Escola Teste",
+                "address": "Florianópolis, SC",
+                "phone": "(48) 3333-3333",
+                "reviews": [],
+            }],
+        }
+
+    monkeypatch.setattr("app.main.search_google_places", fake_google_search)
+    preview = client.post("/api/v1/google-places/preview", json={
+        "query": "escolas particulares em Florianópolis SC",
+        "limit": 5,
+        "include_contacts": True,
+        "include_reviews": True,
+    })
+    assert preview.status_code == 200
+    assert preview.json()["places"][0]["name"] == "Escola Teste"
+    assert preview.json()["free_monthly_events"] == 1000
 
 
 def test_manual_lead_pipeline_requires_email_and_approval(client, monkeypatch):
