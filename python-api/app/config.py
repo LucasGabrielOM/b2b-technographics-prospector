@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     deepseek_model: str = "deepseek-chat"
     hunter_api_key: str | None = None
     serper_api_key: str | None = None
+    google_maps_api_key: str | None = None
     outreach_enabled: bool = False
     outreach_webhook_url: str | None = None
     crawler_user_agent: str = "B2BProspector/1.0 (https://github.com/LucasGabrielOM/b2b-technographics-prospector)"
