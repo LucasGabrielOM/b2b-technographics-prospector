@@ -168,6 +168,7 @@ function renderMapsResults(data) {
           ${place.website ? `<a href="${escapeHtml(place.website)}" target="_blank" rel="noopener">Site ↗</a>` : ''}
           ${place.google_maps_url ? `<a href="${escapeHtml(place.google_maps_url)}" target="_blank" rel="noopener">Google Maps ↗</a>` : ''}
         </div>
+        ${place.review_analysis?.summary ? `<div class="review-analysis"><strong>Qualificação sugerida · ${escapeHtml(place.review_analysis.pain_score)}/90</strong><p>${escapeHtml(place.review_analysis.summary)}</p></div>` : ''}
         ${place.reviews?.length ? `<div class="review-samples"><span>Amostra por relevância</span>${place.reviews.slice(0,2).map((review) => `<blockquote><b>${escapeHtml(review.rating || '')}★ · ${escapeHtml(review.published || '')}</b><p>${escapeHtml(review.text || 'Avaliação sem texto')}</p></blockquote>`).join('')}</div>` : ''}
       </article>`).join('')}` : '<div class="maps-empty">Nenhum local retornado para esta consulta.</div>';
 }

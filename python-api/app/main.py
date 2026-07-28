@@ -15,7 +15,7 @@ from .config import Settings, get_settings
 from .database import Base, engine, ensure_lead_contact_columns, get_db
 from .google_places import GooglePlacesError, search_google_places
 from .models import Lead, LeadStatus, PortalUser
-from .prospecting import discover_businesses, map_complaints
+from .prospecting import discover_businesses, map_complaints, score_google_review_signals
 from .schemas import DiscoveryRequest, GenerateRequest, GooglePlacesPreviewRequest, LeadOut, LeadPatch, MarkContactedRequest, PortalPasswordReset, PortalUserCreate, PortalUserOut, PortalUserPatch, ProspectingRunRequest, ProspectRequest, SchoolProspectRequest, SuppressRequest
 from .school_prospecting import INEP_SOURCE_URL, enrich_school_batch, enrich_school_public_contacts, school_evidence, select_schools
 from .services import dispatch, enrich_with_hunter, generate_draft, is_business_email, refresh_lead_score, scan_domain
@@ -312,13 +312,23 @@ async def google_places_preview(
 ):
     require_portal_admin(request, settings)
     try:
-        return await search_google_places(
+        result = await search_google_places(
             payload.query,
             settings,
             limit=payload.limit,
             include_contacts=payload.include_contacts,
             include_reviews=payload.include_reviews,
         )
+        if payload.include_reviews:
+            for place in result.get("places") or []:
+                analysis = score_google_review_signals(place)
+                place["review_analysis"] = {
+                    "pain_score": analysis["pain_score"],
+                    "summary": analysis["pain_summary"],
+                    "themes": analysis["review_pain_themes"],
+                    "complaint_reviews": analysis["review_signal_count"],
+                }
+        return result
     except GooglePlacesError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
@@ -353,9 +363,12 @@ async def run_prospecting(
     quick_mode = not payload.include_complaints
     maps_enabled = bool((settings.google_maps_api_key or "").strip())
     discovery_timeout = (28 if maps_enabled else 18) if quick_mode else 55
-    scan_timeout = 8 if quick_mode else max(15, int(settings.request_timeout_seconds * 2))
+    scan_timeout = 10 if quick_mode else max(15, int(settings.request_timeout_seconds * 2))
 
-    candidate_pool = min(80, max(30, payload.limit * 4, payload.target_contacts * 4)) if quick_mode else min(120, max(20, payload.limit * 5, payload.target_contacts * 5))
+    if quick_mode and maps_enabled:
+        candidate_pool = min(50, max(20, payload.limit * 2, payload.target_contacts * 2))
+    else:
+        candidate_pool = min(80, max(30, payload.limit * 4, payload.target_contacts * 4)) if quick_mode else min(120, max(20, payload.limit * 5, payload.target_contacts * 5))
     try:
         prospects = await asyncio.wait_for(
             discover_businesses(payload.city, payload.state, payload.segments, candidate_pool, settings),
@@ -391,14 +404,14 @@ async def run_prospecting(
 
     async def scan(item: dict) -> tuple[dict, dict]:
         async with semaphore:
-            max_pages = 1 if quick_mode else 5
+            max_pages = 2 if quick_mode else 5
             try:
                 scan_result = await asyncio.wait_for(
                     scan_domain(item["domain"], settings, max_pages=max_pages),
                     timeout=scan_timeout,
                 )
             except Exception:
-                scan_result = {"crm": None, "confidence": 0.0, "evidence": [], "public_emails": [], "public_phones": [], "public_whatsapps": [], "pages_scanned": 0}
+                scan_result = {"crm": None, "confidence": 0.0, "evidence": [], "contact_evidence": [], "public_emails": [], "public_phones": [], "public_whatsapps": [], "pages_scanned": 0}
             return item, scan_result
 
     tasks = [asyncio.create_task(scan(item)) for item in prospects]
@@ -434,7 +447,24 @@ async def run_prospecting(
         lead.opportunity_type = item.get("opportunity_type") or lead.opportunity_type
         lead.crm = scan_result["crm"]
         lead.confidence = scan_result["confidence"]
-        lead.evidence = scan_result["evidence"]
+        combined_evidence = [
+            *(scan_result.get("evidence") or []),
+            *(item.get("evidence") or []),
+            *(scan_result.get("contact_evidence") or []),
+        ]
+        lead.evidence = []
+        seen_evidence: set[tuple] = set()
+        for evidence_item in combined_evidence:
+            key = (
+                evidence_item.get("source"),
+                evidence_item.get("type"),
+                evidence_item.get("technology"),
+                evidence_item.get("public_whatsapp"),
+            )
+            if key in seen_evidence:
+                continue
+            seen_evidence.add(key)
+            lead.evidence.append(evidence_item)
         lead.pain_score = item.get("pain_score", 0)
         lead.pain_summary = item.get("pain_summary")
         lead.pain_source = item.get("pain_source")

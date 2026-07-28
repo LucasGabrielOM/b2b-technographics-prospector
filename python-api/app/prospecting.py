@@ -27,6 +27,34 @@ PAIN_TERMS = {
     "pos-venda": 12,
     "reclamacao": 16,
     "avaliacao": 10,
+    "nao atende": 22,
+    "ninguem atende": 25,
+    "site nao funciona": 25,
+    "site horrivel": 25,
+    "site ruim": 20,
+    "erro no site": 20,
+}
+
+REVIEW_PAIN_THEMES = {
+    "demora no atendimento": (
+        "demora", "demorado", "espera", "muito tempo", "atraso", "lento",
+    ),
+    "falta de retorno": (
+        "sem retorno", "falta de retorno", "nao responde", "ninguem responde",
+        "nao retornou", "nao retornam",
+    ),
+    "dificuldade por telefone ou WhatsApp": (
+        "nao atende", "ninguem atende", "telefone nao atende",
+        "whatsapp nao responde", "whatsapp sem resposta",
+    ),
+    "problema no site ou canal digital": (
+        "site nao funciona", "site horrivel", "site ruim", "erro no site",
+        "nao consigo acessar", "aplicativo nao funciona",
+    ),
+    "problema de suporte ou pós-venda": (
+        "pos-venda", "suporte", "assistencia", "cancelamento",
+        "nao resolveu", "sem solucao",
+    ),
 }
 
 JOB_TERMS = {
@@ -228,6 +256,94 @@ def _score_signals(results: list[dict]) -> dict:
     }
 
 
+def score_google_review_signals(place: dict) -> dict:
+    """Converte uma amostra de reviews do Maps em sinais explicáveis de dor."""
+    reviews = place.get("reviews") or []
+    theme_counts: dict[str, int] = {}
+    matched_reviews = 0
+    severe_reviews = 0
+    for review in reviews:
+        text = _normalize_ascii(review.get("text") or "")
+        try:
+            rating = float(review.get("rating") or 0)
+        except (TypeError, ValueError):
+            rating = 0
+        themes = [
+            label
+            for label, terms in REVIEW_PAIN_THEMES.items()
+            if any(_normalize_ascii(term) in text for term in terms)
+        ]
+        # Evita transformar elogios que citam "atendimento" em reclamação.
+        if not themes or (rating and rating > 3):
+            continue
+        matched_reviews += 1
+        severe_reviews += int(rating and rating <= 2)
+        for theme in themes:
+            theme_counts[theme] = theme_counts.get(theme, 0) + 1
+
+    maps_url = place.get("google_maps_url")
+    rating = place.get("rating")
+    total_reviews = int(place.get("review_count") or 0)
+    evidence = [{
+        "source": maps_url,
+        "technology": "Google Maps",
+        "type": "public_business_profile",
+        "rating": rating,
+        "review_count": total_reviews,
+        "business_status": place.get("business_status"),
+    }]
+    if not matched_reviews:
+        return {
+            "pain_score": 0,
+            "pain_summary": None,
+            "pain_source": None,
+            "opportunity_type": "prospecao consultiva",
+            "review_signal_count": 0,
+            "review_pain_themes": [],
+            "evidence": evidence,
+        }
+
+    ordered_themes = sorted(theme_counts, key=lambda value: (-theme_counts[value], value))
+    score = 35 if matched_reviews == 1 else min(85, 55 + (matched_reviews - 2) * 10)
+    if matched_reviews == 1 and severe_reviews and len(ordered_themes) >= 2:
+        score = 50
+    try:
+        if float(rating or 0) and float(rating) <= 3.5:
+            score = min(90, score + 5)
+    except (TypeError, ValueError):
+        pass
+    themes_text = ", ".join(ordered_themes[:3])
+    profile_text = f" O perfil possui nota {rating}/5 em {total_reviews} avaliações." if rating and total_reviews else ""
+    summary = (
+        f"{matched_reviews} de {len(reviews)} avaliações públicas retornadas pelo Google "
+        f"apresentam sinais de {themes_text}.{profile_text} "
+        "A API fornece uma amostra de até 5 avaliações por relevância."
+    )
+    evidence.append({
+        "source": maps_url,
+        "technology": "Avaliações públicas do Google",
+        "type": "public_review_signal",
+        "sample_size": len(reviews),
+        "complaint_reviews": matched_reviews,
+        "themes": ordered_themes,
+        "review_order": "relevância",
+    })
+    opportunity = (
+        "melhoria do site e automacao de atendimento"
+        if "problema no site ou canal digital" in ordered_themes
+        else "recuperacao de atendimento"
+    )
+    return {
+        "pain_score": score,
+        "pain_summary": summary,
+        "pain_source": maps_url,
+        "opportunity_type": opportunity,
+        "review_signal_count": matched_reviews,
+        "review_pain_themes": ordered_themes,
+        "evidence": evidence,
+    }
+
+
 def _deepseek_client(settings: Settings) -> OpenAI | None:
     if not settings.deepseek_api_key:
         return None
@@ -371,10 +487,21 @@ async def discover_from_google_places(
                 settings,
                 limit=per_segment,
                 include_contacts=True,
-                include_reviews=False,
+                include_reviews=True,
             )
         except GooglePlacesError:
-            payload = {"places": []}
+            # Uma chave de demonstração pode permitir contatos mas bloquear
+            # campos Atmosphere. Nesse caso, a descoberta ainda continua.
+            try:
+                payload = await search_google_places(
+                    f"{segment} em {city}, {state}, Brasil",
+                    settings,
+                    limit=per_segment,
+                    include_contacts=True,
+                    include_reviews=False,
+                )
+            except GooglePlacesError:
+                payload = {"places": []}
         return segment, payload
 
     batches = await asyncio.gather(*(search_segment(segment) for segment in segments))
@@ -385,6 +512,7 @@ async def discover_from_google_places(
             domain = normalize_domain(place.get("website"))
             if not domain or domain in seen or domain in IGNORED_DISCOVERY_DOMAINS:
                 continue
+            review_signals = score_google_review_signals(place)
             prospects.append({
                 "company_name": place.get("name") or domain,
                 "domain": domain,
@@ -395,6 +523,7 @@ async def discover_from_google_places(
                 "contact_phone": place.get("phone"),
                 "external_id": f"google:{place['place_id']}" if place.get("place_id") else None,
                 "segment_match": True,
+                **review_signals,
             })
             seen.add(domain)
             if len(prospects) >= limit:
@@ -496,13 +625,16 @@ async def find_complaint_signals(company_name: str, domain: str, settings: Setti
     heuristic = _score_signals(collected)
     ai_result: dict = {}
     if settings.deepseek_api_key and collected:
-        ai_result = await asyncio.to_thread(
-            _deepseek_qualify,
-            company_name,
-            domain,
-            {"queries": queries, "results": collected[:12], "heuristic": heuristic},
-            settings,
-        )
+        try:
+            ai_result = await asyncio.to_thread(
+                _deepseek_qualify,
+                company_name,
+                domain,
+                {"queries": queries, "results": collected[:12], "heuristic": heuristic},
+                settings,
+            )
+        except Exception:
+            ai_result = {}
     pain_score = max(int(ai_result.get("pain_score") or 0), int(heuristic["pain_score"] or 0))
     opportunity_type = ai_result.get("opportunity_type") or heuristic["opportunity_type"]
     summary = ai_result.get("summary") or heuristic["pain_summary"]
@@ -526,6 +658,12 @@ async def map_complaints(prospects: list[dict], settings: Settings, enabled: boo
     async def enrich(item: dict) -> dict:
         async with semaphore:
             pain = await find_complaint_signals(item["company_name"], item["domain"], settings)
-        return {**item, **pain}
+        if int(pain.get("pain_score") or 0) >= int(item.get("pain_score") or 0):
+            return {**item, **pain}
+        return {
+            **item,
+            "signal_count": int(item.get("signal_count") or 0) + int(pain.get("signal_count") or 0),
+            "signal_snapshot": pain.get("signal_snapshot") or [],
+        }
 
     return list(await asyncio.gather(*(enrich(item) for item in prospects)))

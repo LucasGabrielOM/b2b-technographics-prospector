@@ -1,6 +1,8 @@
 from datetime import datetime
+import re
+from urllib.parse import quote
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, computed_field, field_validator
 
 
 class DiscoveryRequest(BaseModel):
@@ -201,3 +203,11 @@ class LeadOut(BaseModel):
     contacted_at: datetime | None
     created_at: datetime
     updated_at: datetime
+
+    @computed_field(return_type=str | None)
+    @property
+    def whatsapp_url(self) -> str | None:
+        digits = re.sub(r"\D", "", self.contact_whatsapp or "")
+        if len(digits) not in {12, 13} or "0800" in digits:
+            return None
+        return f"https://api.whatsapp.com/send/?phone={quote('+' + digits, safe='')}"
