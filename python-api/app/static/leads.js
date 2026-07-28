@@ -129,8 +129,11 @@ function applyFilters(resetPage = true) {
 function leadRow(lead) {
   const channels = contactQuality(lead);
   const scoreColor = lead.temperature === 'hot' ? '#e99a2a' : lead.temperature === 'warm' ? '#4f8ff7' : '#c8d1da';
-  const mainContact = lead.contact_name || lead.contact_email || lead.contact_whatsapp || lead.contact_phone || 'Contato não localizado';
-  const contactDetail = lead.contact_name ? (lead.contact_role || lead.contact_email || lead.contact_phone || '') : (lead.contact_email || lead.contact_phone || '');
+  const mainContact = lead.contact_name || lead.contact_email || 'Contato não localizado';
+  const contactDetail = [
+    lead.contact_whatsapp ? `WhatsApp: ${lead.contact_whatsapp}` : null,
+    lead.contact_phone ? `Telefone: ${lead.contact_phone}` : null,
+  ].filter(Boolean).join(' · ') || (lead.contact_role || 'Sem telefone público');
   return `<tr>
     <td><div class="company-cell"><span class="company-avatar">${escapeHtml(initials(leadName(lead)).slice(0,1))}</span><div><strong title="${escapeHtml(leadName(lead))}">${escapeHtml(leadName(lead))}</strong><small>${escapeHtml(lead.location || lead.sector || 'Local não informado')} · ${lead.lead_type === 'school' ? 'Escola' : 'Empresa'}</small></div></div></td>
     <td><div class="qualification"><span class="score-ring" style="--score-color:${scoreColor}">${leadScore(lead)}</span><div><strong>${escapeHtml(temperatureLabels[lead.temperature] || 'Revisar')}</strong><small>${escapeHtml(qualificationSummary(lead))}</small></div></div></td>
@@ -185,7 +188,8 @@ function openDrawer(id) {
       <div class="detail-item"><span>Responsável</span><strong>${escapeHtml(lead.contact_name || 'Não localizado')}</strong></div>
       <div class="detail-item"><span>Cargo</span><strong>${escapeHtml(lead.contact_role || 'Não informado')}</strong></div>
       <div class="detail-item"><span>E-mail</span><strong>${escapeHtml(lead.contact_email || 'Não localizado')}</strong></div>
-      <div class="detail-item"><span>WhatsApp / telefone</span><strong>${escapeHtml(lead.contact_whatsapp || lead.contact_phone || 'Não localizado')}</strong></div>
+      <div class="detail-item"><span>WhatsApp confirmado</span><strong>${escapeHtml(lead.contact_whatsapp || 'Não localizado')}</strong></div>
+      <div class="detail-item"><span>Telefone público</span><strong>${escapeHtml(lead.contact_phone || 'Não localizado')}</strong></div>
     </div></section>
     ${lead.pain_summary ? `<section class="detail-section"><h3>Sinal identificado</h3><p class="detail-copy">${escapeHtml(lead.pain_summary)}</p>${lead.pain_source?`<a href="${safeUrl(lead.pain_source)}" target="_blank" rel="noopener">Ver fonte pública →</a>`:''}</section>`:''}
     <section class="detail-section"><h3>Por que recebeu essa nota?</h3><div class="reason-list">${reasons.length?reasons.map((reason)=>`<div class="reason">${escapeHtml(reason)}</div>`).join(''):'<div class="reason">Pontuação baseada em contato, aderência e fontes públicas.</div>'}</div></section>

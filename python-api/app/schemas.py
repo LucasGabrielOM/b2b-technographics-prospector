@@ -40,6 +40,7 @@ class SchoolProspectRequest(BaseModel):
     private_category: str = Field(default="1", pattern="^(1|2|3|4|all)$")
     only_new: bool = True
     enrich_cnpj_limit: int = Field(default=30, ge=0, le=40)
+    google_maps_enrich_limit: int = Field(default=0, ge=0, le=20)
 
     @field_validator("states")
     @classmethod
@@ -66,7 +67,11 @@ class ProspectingRunRequest(BaseModel):
     limit: int = Field(default=50, ge=1, le=100)
     only_new: bool = True
     require_phone: bool = True
-    enrich_cnpj_limit: int = Field(default=12, ge=0, le=40)
+    validate_cnpj: bool = True
+    use_google_maps: bool = True
+    # Mantido para compatibilidade com workflows antigos. O portal usa
+    # validate_cnpj e não mostra mais um número técnico ao usuário.
+    enrich_cnpj_limit: int | None = Field(default=None, ge=0, le=40)
     min_score: int = Field(default=45, ge=0, le=100)
     include_complaints: bool = False
 

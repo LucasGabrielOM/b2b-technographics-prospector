@@ -8,10 +8,13 @@ import re
 import unicodedata
 from functools import lru_cache
 from pathlib import Path
+from urllib.parse import urlparse
 
 import httpx
 
 from .config import Settings
+from .google_places import GooglePlacesError, search_google_places
+from .services import scan_domain
 
 
 CATALOG_PATH = Path(__file__).parent / "data" / "private_schools_2025.jsonl.gz"
@@ -170,6 +173,86 @@ async def enrich_school_batch(schools: list[dict], settings: Settings, limit: in
     return [{**school, **results.get(school["school_code"], {"registry_checked": False})} for school in schools]
 
 
+def _school_place_match(school: dict, place: dict) -> bool:
+    stop_words = {"escola", "colegio", "centro", "educacional", "instituto", "de", "da", "do", "das", "dos"}
+    expected = {token for token in re.findall(r"[a-z0-9]+", _ascii(school.get("school_name"))) if token not in stop_words}
+    found = {token for token in re.findall(r"[a-z0-9]+", _ascii(place.get("name"))) if token not in stop_words}
+    return bool(expected & found) if expected else bool(found)
+
+
+async def enrich_school_public_contacts(
+    schools: list[dict],
+    settings: Settings,
+    limit: int,
+) -> list[dict]:
+    """Usa Maps para localizar site/telefone e confirma WhatsApp no site oficial."""
+    if limit <= 0 or not (settings.google_maps_api_key or "").strip():
+        return schools
+    semaphore = asyncio.Semaphore(4)
+    targets = schools[:limit]
+
+    async def enrich(school: dict) -> tuple[str, dict]:
+        async with semaphore:
+            query = f"{school['school_name']} {school['city']} {school['state']}"
+            try:
+                payload = await search_google_places(
+                    query,
+                    settings,
+                    limit=3,
+                    include_contacts=True,
+                    include_reviews=False,
+                )
+            except GooglePlacesError:
+                return school["school_code"], {"maps_checked": False}
+            place = next((
+                item for item in (payload.get("places") or [])
+                if item.get("business_status") in {None, "OPERATIONAL"}
+                and _school_place_match(school, item)
+            ), None)
+            if not place:
+                return school["school_code"], {"maps_checked": True}
+            result = {
+                "maps_checked": True,
+                "google_place_id": place.get("place_id"),
+                "google_maps_url": place.get("google_maps_url"),
+                "website_url": place.get("website"),
+                "contact_phone": _phone(place.get("phone")),
+                "maps_name": place.get("name"),
+                "maps_address": place.get("address"),
+            }
+            website = place.get("website")
+            host = (urlparse(website or "").hostname or "").lower().removeprefix("www.")
+            if not host or "." not in host:
+                return school["school_code"], result
+            try:
+                site = await asyncio.wait_for(
+                    scan_domain(host, settings, max_pages=2),
+                    timeout=12,
+                )
+            except Exception:
+                return school["school_code"], result
+            result["website_domain"] = host
+            result["contact_whatsapp"] = next(iter(site.get("public_whatsapps") or []), None)
+            result["website_phone"] = next(iter(site.get("public_phones") or []), None)
+            result["website_email"] = next(iter(site.get("public_emails") or []), None)
+            result["contact_phone"] = result["contact_phone"] or result["website_phone"]
+            result["contact_email"] = result["website_email"]
+            return school["school_code"], result
+
+    tasks = [asyncio.create_task(enrich(school)) for school in targets]
+    done, pending = await asyncio.wait(tasks, timeout=38)
+    for task in pending:
+        task.cancel()
+    results: dict[str, dict] = {}
+    for task in done:
+        try:
+            code, result = task.result()
+            results[code] = result
+        except Exception:
+            continue
+    return [{**school, **results.get(school["school_code"], {})} for school in schools]
+
+
 def school_evidence(school: dict) -> list[dict]:
     evidence = [{
         "source": INEP_SOURCE_URL,
@@ -195,5 +278,22 @@ def school_evidence(school: dict) -> list[dict]:
             "public_email": school.get("contact_email"),
             "public_phone": school.get("contact_phone"),
             "responsible": school.get("contact_name"),
+        })
+    if school.get("maps_checked") and school.get("google_place_id"):
+        evidence.append({
+            "source": school.get("google_maps_url"),
+            "technology": "Perfil público no Google Maps",
+            "type": "public_business_profile",
+            "place_id": school.get("google_place_id"),
+            "matched_name": school.get("maps_name"),
+            "public_phone": school.get("contact_phone"),
+            "website": school.get("website_url"),
+        })
+    if school.get("contact_whatsapp") and school.get("website_url"):
+        evidence.append({
+            "source": school.get("website_url"),
+            "technology": "Site oficial da escola",
+            "type": "official_whatsapp_link",
+            "public_whatsapp": school.get("contact_whatsapp"),
         })
     return evidence

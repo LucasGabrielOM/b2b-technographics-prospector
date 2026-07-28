@@ -151,11 +151,14 @@ n8n ou no Swagger. A página permite:
 - pesquisar escolas particulares por estado e cidade usando o INEP 2025;
 - pesquisar empresas por cidade, estado e segmentos;
 - escolher o volume e os critérios mínimos;
+- escolher **sim ou não** para a validação complementar de CNPJ;
+- enriquecer escolas com telefone e site do Google Maps e confirmar WhatsApp
+  somente quando existir link público no site oficial;
 - manter `only_new=true`, evitando leads repetidos;
 - acompanhar a execução e abrir os resultados na central de leads;
 - testar a Places API (New) do Google Maps sem expor a chave no navegador.
 
-Para habilitar o laboratório do Google Maps, ative a **Places API (New)** no
+Para habilitar a busca automática e o laboratório do Google Maps, ative a **Places API (New)** no
 Google Cloud, crie uma chave restrita à API e configure no servidor:
 
 ```text
@@ -164,7 +167,11 @@ GOOGLE_MAPS_API_KEY=sua-chave-restrita
 
 No Render, adicione a variável no serviço da API em **Environment**. A chave
 fica somente no backend; o endpoint de configuração informa apenas se ela está
-presente.
+presente. Quando configurada, a busca de empresas passa a usar o Google Maps
+como fonte principal e as fontes abertas como contingência. Na busca de
+escolas, o Maps fornece perfil, telefone e site; o robô visita o site e só
+preenche `contact_whatsapp` quando encontra um link público explícito. O campo
+`contact_phone` continua separado.
 
 O crédito fixo mensal de US$ 200 foi substituído em 1º de março de 2025 por
 franquias mensais específicas para cada SKU. No modo de teste atual:
@@ -180,6 +187,11 @@ configure alertas de orçamento e limite as cotas no Google Cloud. A API nova
 retorna no máximo cinco avaliações por local, ordenadas por relevância, não
 necessariamente as mais recentes. O laboratório apenas exibe essa amostra e
 não a grava permanentemente no banco.
+
+Para uma demonstração com baixo risco de cobrança, restrinja a chave apenas à
+**Places API (New)** e defina uma cota abaixo da franquia mensal. Alertas de
+orçamento notificam, mas não interrompem sozinhos o consumo; a cota é o controle
+que bloqueia novas solicitações quando o limite é atingido.
 
 ## Primeiro teste
 

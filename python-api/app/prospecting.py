@@ -10,6 +10,7 @@ from bs4 import BeautifulSoup
 from openai import OpenAI
 
 from .config import Settings
+from .google_places import GooglePlacesError, search_google_places
 
 
 PAIN_TERMS = {
@@ -349,8 +350,60 @@ async def discover_from_web(city: str, state: str, segments: list[str], limit: i
     return _dedupe_prospects(prospects)[:limit]
 
 
+async def discover_from_google_places(
+    city: str,
+    state: str,
+    segments: list[str],
+    limit: int,
+    settings: Settings,
+) -> list[dict]:
+    """Descobre empresas operacionais com site oficial usando Places API (New)."""
+    if not (settings.google_maps_api_key or "").strip():
+        return []
+    prospects: list[dict] = []
+    seen: set[str] = set()
+    per_segment = min(20, max(5, math.ceil(limit / max(1, len(segments)))))
+
+    async def search_segment(segment: str) -> tuple[str, dict]:
+        try:
+            payload = await search_google_places(
+                f"{segment} em {city}, {state}, Brasil",
+                settings,
+                limit=per_segment,
+                include_contacts=True,
+                include_reviews=False,
+            )
+        except GooglePlacesError:
+            payload = {"places": []}
+        return segment, payload
+
+    batches = await asyncio.gather(*(search_segment(segment) for segment in segments))
+    for segment, payload in batches:
+        for place in payload.get("places") or []:
+            if place.get("business_status") not in {None, "OPERATIONAL"}:
+                continue
+            domain = normalize_domain(place.get("website"))
+            if not domain or domain in seen or domain in IGNORED_DISCOVERY_DOMAINS:
+                continue
+            prospects.append({
+                "company_name": place.get("name") or domain,
+                "domain": domain,
+                "location": f"{city}/{state}",
+                "sector": place.get("primary_type") or segment,
+                "source": place.get("google_maps_url") or place.get("website") or f"https://{domain}",
+                "website_url": place.get("website") or f"https://{domain}",
+                "contact_phone": place.get("phone"),
+                "external_id": f"google:{place['place_id']}" if place.get("place_id") else None,
+                "segment_match": True,
+            })
+            seen.add(domain)
+            if len(prospects) >= limit:
+                break
+    return _dedupe_prospects(prospects)[:limit]
+
+
 async def discover_businesses(city: str, state: str, segments: list[str], limit: int, settings: Settings) -> list[dict]:
-    """Combina cadastro geografico, busca web e varredura por varias cidades de SC."""
+    """Combina Google Maps, cadastro geográfico e busca web com contingência."""
     prospects: list[dict] = []
     seen: set[str] = set()
     locations = _search_locations(city, state)
@@ -358,14 +411,32 @@ async def discover_businesses(city: str, state: str, segments: list[str], limit:
     for location_city in locations:
         if len(prospects) >= limit:
             break
-        try:
-            osm_prospects = await discover_from_osm(location_city, state, segments, per_location_limit, settings)
-        except (httpx.HTTPError, ValueError, KeyError):
-            osm_prospects = []
+        maps_prospects = await discover_from_google_places(
+            location_city,
+            state,
+            segments,
+            min(per_location_limit, limit - len(prospects)),
+            settings,
+        )
+        osm_prospects = []
+        if not maps_prospects:
+            try:
+                osm_prospects = await discover_from_osm(location_city, state, segments, per_location_limit, settings)
+            except Exception:
+                osm_prospects = []
         web_prospects = []
-        if settings.serper_api_key and len(osm_prospects) < per_location_limit:
-            web_prospects = await discover_from_web(location_city, state, segments, per_location_limit - len(osm_prospects), settings)
-        for item in [*osm_prospects, *web_prospects]:
+        if not maps_prospects and len(osm_prospects) < per_location_limit:
+            try:
+                web_prospects = await discover_from_web(
+                    location_city,
+                    state,
+                    segments,
+                    per_location_limit - len(osm_prospects),
+                    settings,
+                )
+            except Exception:
+                web_prospects = []
+        for item in [*maps_prospects, *osm_prospects, *web_prospects]:
             key = _prospect_key(item)
             if not key or key in seen:
                 continue
