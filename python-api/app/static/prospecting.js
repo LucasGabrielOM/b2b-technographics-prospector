@@ -58,7 +58,8 @@ function runPayload() {
       cities: splitValues(byId('schoolCities').value),
       limit: Number(byId('schoolLimit').value),
       require_phone: byId('requirePhone').checked,
-      enrich_cnpj_limit: Number(byId('cnpjLimit').value),
+      validate_cnpj: byId('validateCnpj').checked,
+      use_google_maps: byId('useGoogleMapsSchool').checked,
       only_new: true,
       segments: ['educacao'],
     };
@@ -129,8 +130,8 @@ async function runProspecting(event) {
       setRunState('success','Pesquisa concluída',`${result.created_count} novos leads foram adicionados sem duplicar a base.`);
       notify(`${result.created_count} novos leads adicionados à central.`);
     } else {
-      setRunState('success','Nenhum lead novo nesta rodada','Os resultados encontrados já estavam na base ou não atenderam aos filtros escolhidos.');
-      notify('A execução terminou corretamente, mas não encontrou leads novos.');
+      setRunState('success','Nenhum lead novo nesta rodada',result.message || 'Os resultados encontrados já estavam na base ou não atenderam aos filtros escolhidos.');
+      notify(result.message || 'A execução terminou corretamente, mas não encontrou leads novos.');
     }
   } catch (error) {
     clearInterval(state.timer);
@@ -202,6 +203,9 @@ async function loadConfig() {
   byId('mapsStatus').className = `integration-pill ${state.mapsConfigured ? 'ready' : 'missing'}`;
   byId('mapsStatus').textContent = state.mapsConfigured ? 'Configurada' : 'Não configurada';
   byId('connectionLabel').textContent = state.mapsConfigured ? 'Google Maps conectado' : 'Google Maps opcional';
+  byId('useGoogleMapsSchool').checked = state.mapsConfigured;
+  byId('useGoogleMapsSchool').disabled = !state.mapsConfigured;
+  byId('useGoogleMapsSchool').closest('.check-card').classList.toggle('option-disabled',!state.mapsConfigured);
   if (!state.mapsConfigured) {
     byId('mapsResults').innerHTML = '<div class="maps-empty"><strong>Falta somente a chave do servidor.</strong><br>Ative a Places API (New), crie uma chave restrita e adicione <code>GOOGLE_MAPS_API_KEY</code> no Render.</div>';
   }

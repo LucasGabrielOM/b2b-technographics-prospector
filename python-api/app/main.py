@@ -17,7 +17,7 @@ from .google_places import GooglePlacesError, search_google_places
 from .models import Lead, LeadStatus, PortalUser
 from .prospecting import discover_businesses, map_complaints
 from .schemas import DiscoveryRequest, GenerateRequest, GooglePlacesPreviewRequest, LeadOut, LeadPatch, MarkContactedRequest, PortalPasswordReset, PortalUserCreate, PortalUserOut, PortalUserPatch, ProspectingRunRequest, ProspectRequest, SchoolProspectRequest, SuppressRequest
-from .school_prospecting import INEP_SOURCE_URL, enrich_school_batch, school_evidence, select_schools
+from .school_prospecting import INEP_SOURCE_URL, enrich_school_batch, enrich_school_public_contacts, school_evidence, select_schools
 from .services import dispatch, enrich_with_hunter, generate_draft, is_business_email, refresh_lead_score, scan_domain
 
 Base.metadata.create_all(bind=engine)
@@ -244,6 +244,10 @@ async def run_from_portal(
     identity = require_portal_admin(request, settings)
     started_at = datetime.now(timezone.utc)
     if payload.audience == "schools":
+        cnpj_limit = 0
+        if payload.validate_cnpj:
+            cnpj_limit = payload.enrich_cnpj_limit if payload.enrich_cnpj_limit is not None else min(12, payload.limit)
+        maps_limit = min(12, payload.limit) if payload.use_google_maps else 0
         leads = await run_school_prospecting(
             SchoolProspectRequest(
                 states=payload.states,
@@ -252,7 +256,8 @@ async def run_from_portal(
                 require_phone=payload.require_phone,
                 private_category="1",
                 only_new=payload.only_new,
-                enrich_cnpj_limit=payload.enrich_cnpj_limit,
+                enrich_cnpj_limit=cnpj_limit,
+                google_maps_enrich_limit=maps_limit,
             ),
             db,
             settings,
@@ -276,6 +281,15 @@ async def run_from_portal(
         LeadOut.model_validate(lead).model_dump(mode="json")
         for lead in leads
     ]
+    if serialized:
+        message = f"{len(serialized)} novos leads foram adicionados sem duplicar a base."
+    elif payload.audience == "companies" and not (settings.google_maps_api_key or "").strip():
+        message = (
+            "Nenhuma empresa nova foi encontrada pelas fontes públicas gratuitas. "
+            "Conecte a Places API (New) para tornar a descoberta de empresas mais estável."
+        )
+    else:
+        message = "Os resultados encontrados já estavam na base ou não atenderam aos filtros escolhidos."
     return {
         "status": "completed",
         "audience": payload.audience,
@@ -285,6 +299,7 @@ async def run_from_portal(
         "started_by": identity.username,
         "started_at": started_at.isoformat(),
         "finished_at": datetime.now(timezone.utc).isoformat(),
+        "message": message,
         "leads": serialized,
     }
 
@@ -336,7 +351,8 @@ async def run_prospecting(
 ):
     """Descobre empresas e executa todo o enriquecimento sem receber domínios manualmente."""
     quick_mode = not payload.include_complaints
-    discovery_timeout = 18 if quick_mode else 45
+    maps_enabled = bool((settings.google_maps_api_key or "").strip())
+    discovery_timeout = (28 if maps_enabled else 18) if quick_mode else 55
     scan_timeout = 8 if quick_mode else max(15, int(settings.request_timeout_seconds * 2))
 
     candidate_pool = min(80, max(30, payload.limit * 4, payload.target_contacts * 4)) if quick_mode else min(120, max(20, payload.limit * 5, payload.target_contacts * 5))
@@ -410,9 +426,11 @@ async def run_prospecting(
             lead = Lead(domain=item["domain"])
             db.add(lead)
         lead.company_name = item["company_name"] or lead.company_name
+        lead.external_id = item.get("external_id") or lead.external_id
         lead.location = item["location"]
         lead.sector = item.get("sector") or lead.sector
         lead.discovery_source = item["source"]
+        lead.website_url = item.get("website_url") or lead.website_url or f"https://{item['domain']}"
         lead.opportunity_type = item.get("opportunity_type") or lead.opportunity_type
         lead.crm = scan_result["crm"]
         lead.confidence = scan_result["confidence"]
@@ -422,7 +440,11 @@ async def run_prospecting(
         lead.pain_source = item.get("pain_source")
         if not is_business_email(lead.contact_email):
             lead.contact_email = scan_result["public_emails"][0] if scan_result["public_emails"] else None
-        lead.contact_phone = scan_result["public_phones"][0] if scan_result["public_phones"] else lead.contact_phone
+        lead.contact_phone = (
+            scan_result["public_phones"][0]
+            if scan_result["public_phones"]
+            else item.get("contact_phone") or lead.contact_phone
+        )
         lead.contact_whatsapp = scan_result["public_whatsapps"][0] if scan_result["public_whatsapps"] else lead.contact_whatsapp
         refresh_lead_score(lead)
         if lead.lead_score >= payload.min_score and lead.status != LeadStatus.SUPPRESSED.value:
@@ -456,11 +478,12 @@ async def run_school_prospecting(
         cities=payload.cities,
         private_category=payload.private_category,
         require_phone=payload.require_phone,
-        limit=min(180, payload.limit + payload.enrich_cnpj_limit),
+        limit=min(180, payload.limit + payload.enrich_cnpj_limit + payload.google_maps_enrich_limit),
     )
     if not candidates:
         return []
     candidates = await enrich_school_batch(candidates, settings, payload.enrich_cnpj_limit)
+    candidates = await enrich_school_public_contacts(candidates, settings, payload.google_maps_enrich_limit)
     result: list[Lead] = []
     for school in candidates:
         if school.get("registry_checked") and not school.get("registry_active"):
@@ -494,11 +517,18 @@ async def run_school_prospecting(
         lead.contact_whatsapp = school.get("contact_whatsapp") or lead.contact_whatsapp
         lead.website_url = school.get("website_url") or lead.website_url
         stages = ", ".join(school.get("stages") or []) or "não informadas"
-        contact_origin = "CNPJ/BrasilAPI" if school.get("registry_checked") else "Censo Escolar INEP 2025"
+        contact_origins = ["Censo Escolar INEP 2025"]
+        if school.get("registry_checked"):
+            contact_origins.append("CNPJ/BrasilAPI")
+        if school.get("google_place_id"):
+            contact_origins.append("Google Maps")
+        if school.get("contact_whatsapp"):
+            contact_origins.append("link público no site oficial")
         lead.notes = (
             f"Endereço: {school.get('address') or 'não informado'}. "
             f"Etapas: {stages}. Código INEP: {school['school_code']}. "
-            f"Origem do contato: {contact_origin}."
+            f"Origem dos dados: {', '.join(contact_origins)}. "
+            "Telefone e WhatsApp são campos independentes; o WhatsApp só é preenchido quando há link público explícito."
         )
         refresh_lead_score(lead)
         result.append(lead)

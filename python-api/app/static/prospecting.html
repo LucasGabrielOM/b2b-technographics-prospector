@@ -111,9 +111,13 @@
                 <input id="schoolLimit" type="number" min="1" max="100" value="50">
                 <small>Máximo de 100 por execução.</small>
               </label>
-              <label>Validar CNPJ
-                <input id="cnpjLimit" type="number" min="0" max="40" value="12">
-                <small>Consultas complementares por execução.</small>
+              <label class="check-card full">
+                <input id="validateCnpj" type="checkbox" checked>
+                <span><strong>Sim, validar a situação do CNPJ</strong><small>Confirma cadastro ativo e, quando a fonte pública informar, acrescenta responsável, e-mail e telefone. Se a consulta falhar, o restante do lote continua.</small></span>
+              </label>
+              <label class="check-card full">
+                <input id="useGoogleMapsSchool" type="checkbox" checked>
+                <span><strong>Pesquisar telefone, site e WhatsApp confirmado</strong><small>Usa o Google Maps para localizar o perfil e o site. O WhatsApp só é salvo quando existe um link público oficial — nunca é presumido pelo telefone.</small></span>
               </label>
               <label class="check-card full">
                 <input id="requirePhone" type="checkbox" checked>

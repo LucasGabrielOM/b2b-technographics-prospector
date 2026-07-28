@@ -109,6 +109,83 @@ def test_portal_starts_school_prospecting_and_previews_google_maps(client, monke
     assert preview.json()["free_monthly_events"] == 1000
 
 
+def test_portal_uses_clear_boolean_options_for_school_enrichment(client, monkeypatch):
+    captured = {}
+
+    async def fake_cnpj(schools, settings, limit):
+        captured["cnpj_limit"] = limit
+        return schools
+
+    async def fake_public_contacts(schools, settings, limit):
+        captured["maps_limit"] = limit
+        return schools
+
+    monkeypatch.setattr("app.main.enrich_school_batch", fake_cnpj)
+    monkeypatch.setattr("app.main.enrich_school_public_contacts", fake_public_contacts)
+    assert client.post("/api/v1/auth/login", json={
+        "username": "admin",
+        "password": "demo1234",
+    }).status_code == 200
+
+    response = client.post("/api/v1/prospecting/run", json={
+        "audience": "schools",
+        "states": ["SC"],
+        "limit": 2,
+        "require_phone": True,
+        "validate_cnpj": False,
+        "use_google_maps": True,
+        "segments": ["educacao"],
+    })
+
+    assert response.status_code == 200
+    assert captured == {"cnpj_limit": 0, "maps_limit": 2}
+    assert "message" in response.json()
+
+
+def test_school_maps_enrichment_keeps_phone_and_confirmed_whatsapp_separate(monkeypatch):
+    import asyncio
+
+    from app.config import Settings
+    from app.school_prospecting import enrich_school_public_contacts
+
+    async def fake_google(query, settings, *, limit, include_contacts, include_reviews):
+        return {"places": [{
+            "place_id": "school-place",
+            "name": "Colegio Exemplo",
+            "address": "Florianopolis, SC",
+            "business_status": "OPERATIONAL",
+            "phone": "(48) 3333-1111",
+            "website": "https://colegioexemplo.com.br/contato",
+            "google_maps_url": "https://maps.google.com/?cid=1",
+        }]}
+
+    async def fake_scan(domain, settings, max_pages=5):
+        assert domain == "colegioexemplo.com.br"
+        return {
+            "public_whatsapps": ["+5548999992222"],
+            "public_phones": ["+554833331111"],
+            "public_emails": ["contato@colegioexemplo.com.br"],
+        }
+
+    monkeypatch.setattr("app.school_prospecting.search_google_places", fake_google)
+    monkeypatch.setattr("app.school_prospecting.scan_domain", fake_scan)
+    schools = [{
+        "school_code": "123",
+        "school_name": "Colegio Exemplo",
+        "city": "Florianopolis",
+        "state": "SC",
+    }]
+    enriched = asyncio.run(enrich_school_public_contacts(
+        schools,
+        Settings(google_maps_api_key="test-key"),
+        1,
+    ))[0]
+
+    assert enriched["contact_phone"] == "+554833331111"
+    assert enriched["contact_whatsapp"] == "+5548999992222"
+    assert enriched["website_url"] == "https://colegioexemplo.com.br/contato"
+
+
 def test_manual_lead_pipeline_requires_email_and_approval(client, monkeypatch):
     async def fake_scan(domain, settings, max_pages=5):
         return {
