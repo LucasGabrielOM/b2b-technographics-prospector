@@ -40,6 +40,13 @@ function mapsUrl(lead) {
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${leadName(lead)} ${lead.location || ''}`)}`;
 }
 
+function whatsappUrl(lead, message = '') {
+  const digits = onlyDigits(lead.contact_whatsapp);
+  if (![12,13].includes(digits.length) || digits.includes('0800')) return null;
+  const base = lead.whatsapp_url || `https://api.whatsapp.com/send/?phone=${encodeURIComponent(`+${digits}`)}`;
+  return message ? `${base}&text=${encodeURIComponent(message)}` : base;
+}
+
 function sourceUrl(lead) {
   const realDomain = lead.domain && !String(lead.domain).endsWith('.school') ? lead.domain : null;
   return safeUrl(lead.website_url || realDomain || lead.discovery_source, mapsUrl(lead));
@@ -68,7 +75,10 @@ function defaultMessage(lead) {
   if (lead.crm) {
     return `Olá${firstName}! Sou Lucas Gabriel, da equipe de projetos.\n\nIdentificamos sinais públicos de uso do ${lead.crm} na ${leadName(lead)}. Trabalhamos com integrações e automações para reduzir tarefas manuais e melhorar o acompanhamento comercial.\n\nPosso falar com a pessoa responsável pelo CRM ou pelos processos comerciais?`;
   }
-  return `Olá${firstName}! Sou Lucas Gabriel, da equipe de projetos.\n\nTrabalhamos com implantação de CRM e automação de atendimento para organizar retornos, tarefas e oportunidades.\n\nPosso falar com a pessoa responsável pelos processos comerciais da ${leadName(lead)}?`;
+  const publicSignal = lead.pain_summary
+    ? '\n\nAo analisar sinais públicos de atendimento, vimos uma oportunidade de melhorar a organização dos canais e dos retornos, sem presumir detalhes internos da operação.'
+    : '';
+  return `Olá${firstName}! Sou Lucas Gabriel, da equipe de projetos.\n\nTrabalhamos com implantação de CRM e automação de atendimento para organizar retornos, tarefas e oportunidades.${publicSignal}\n\nPosso falar com a pessoa responsável pelos processos comerciais da ${leadName(lead)}?`;
 }
 
 function contactQuality(lead) {
@@ -188,14 +198,15 @@ function openDrawer(id) {
       <div class="detail-item"><span>Responsável</span><strong>${escapeHtml(lead.contact_name || 'Não localizado')}</strong></div>
       <div class="detail-item"><span>Cargo</span><strong>${escapeHtml(lead.contact_role || 'Não informado')}</strong></div>
       <div class="detail-item"><span>E-mail</span><strong>${escapeHtml(lead.contact_email || 'Não localizado')}</strong></div>
-      <div class="detail-item"><span>WhatsApp confirmado</span><strong>${escapeHtml(lead.contact_whatsapp || 'Não localizado')}</strong></div>
+      <div class="detail-item"><span>WhatsApp confirmado no site</span><strong>${escapeHtml(lead.contact_whatsapp || 'Não localizado')}</strong></div>
       <div class="detail-item"><span>Telefone público</span><strong>${escapeHtml(lead.contact_phone || 'Não localizado')}</strong></div>
     </div></section>
     ${lead.pain_summary ? `<section class="detail-section"><h3>Sinal identificado</h3><p class="detail-copy">${escapeHtml(lead.pain_summary)}</p>${lead.pain_source?`<a href="${safeUrl(lead.pain_source)}" target="_blank" rel="noopener">Ver fonte pública →</a>`:''}</section>`:''}
     <section class="detail-section"><h3>Por que recebeu essa nota?</h3><div class="reason-list">${reasons.length?reasons.map((reason)=>`<div class="reason">${escapeHtml(reason)}</div>`).join(''):'<div class="reason">Pontuação baseada em contato, aderência e fontes públicas.</div>'}</div></section>
     <section class="detail-section"><h3>Fontes consultadas</h3><div class="reason-list">${evidence.length?evidence.map((item)=>`<div class="reason">${escapeHtml(item.technology || item.type || 'Fonte pública')} · ${escapeHtml(item.source || lead.discovery_source || '')}</div>`).join(''):`<div class="reason">${escapeHtml(lead.discovery_source || 'Fonte não informada')}</div>`}</div></section>
     ${lead.notes?`<section class="detail-section"><h3>Observações</h3><p class="detail-copy">${escapeHtml(lead.notes)}</p></section>`:''}`;
-  byId('drawerActions').innerHTML = `<button class="button button-primary" data-message="${lead.id}">${hasContact(lead)?'Preparar contato':'Revisar contato'}</button><a class="button button-light" href="${mapsUrl(lead)}" target="_blank" rel="noopener">Ver no Maps</a><button class="button button-light" data-edit="${lead.id}">Editar lead</button>${lead.status==='sent'?`<button class="button button-light" data-reopen="${lead.id}">Reabrir</button>`:''}`;
+  const directWhatsapp = whatsappUrl(lead,lead.email_body || defaultMessage(lead));
+  byId('drawerActions').innerHTML = `<button class="button button-primary" data-message="${lead.id}">${hasContact(lead)?'Preparar contato':'Revisar contato'}</button>${directWhatsapp?`<a class="button button-whatsapp" href="${directWhatsapp}" target="_blank" rel="noopener">Abrir WhatsApp direto</a>`:''}<a class="button button-light" href="${mapsUrl(lead)}" target="_blank" rel="noopener">Ver no Maps</a><button class="button button-light" data-edit="${lead.id}">Editar lead</button>${lead.status==='sent'?`<button class="button button-light" data-reopen="${lead.id}">Reabrir</button>`:''}`;
   byId('drawerBackdrop').classList.remove('hidden');
   byId('leadDrawer').classList.add('open');
   byId('leadDrawer').setAttribute('aria-hidden','false');
@@ -221,15 +232,15 @@ function openEditor(id) {
 function updateMessageActions(lead) {
   const body = byId('messageBody').value;
   const subject = byId('messageSubject').value;
-  const whatsapp = onlyDigits(lead.contact_whatsapp);
+  const whatsapp = whatsappUrl(lead,body);
   const emailAction = byId('emailAction');
   const whatsappAction = byId('whatsappAction');
   const phoneAction = byId('phoneAction');
   emailAction.classList.toggle('hidden',!lead.contact_email);
-  whatsappAction.classList.toggle('hidden',!(whatsapp.length>=12 && !whatsapp.includes('0800')));
+  whatsappAction.classList.toggle('hidden',!whatsapp);
   phoneAction.classList.toggle('hidden',!lead.contact_phone);
   if (lead.contact_email) emailAction.href = `mailto:${encodeURIComponent(lead.contact_email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-  if (whatsapp.length>=12) whatsappAction.href = `https://api.whatsapp.com/send/?phone=${encodeURIComponent(`+${whatsapp}`)}&text=${encodeURIComponent(body)}`;
+  if (whatsapp) whatsappAction.href = whatsapp;
   if (lead.contact_phone) phoneAction.href = `tel:${onlyDigits(lead.contact_phone)}`;
   const available = [lead.contact_whatsapp&&'WhatsApp',lead.contact_email&&'e-mail',lead.contact_phone&&'telefone'].filter(Boolean);
   byId('messageChannel').textContent = available.length ? `Disponível: ${available.join(', ')}` : 'Nenhum canal confirmado';

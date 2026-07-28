@@ -106,6 +106,7 @@ def test_portal_starts_school_prospecting_and_previews_google_maps(client, monke
     })
     assert preview.status_code == 200
     assert preview.json()["places"][0]["name"] == "Escola Teste"
+    assert preview.json()["places"][0]["review_analysis"]["pain_score"] == 0
     assert preview.json()["free_monthly_events"] == 1000
 
 
@@ -269,6 +270,12 @@ def test_autonomous_prospecting_discovers_domain_contact_and_pain(client, monkey
             "crm": None,
             "confidence": 0,
             "evidence": [],
+            "contact_evidence": [{
+                "source": "https://empresa.com.br/contato",
+                "technology": "WhatsApp",
+                "type": "official_whatsapp_link",
+                "public_whatsapp": "+5548999999999",
+            }],
             "public_emails": ["contato@empresa.com.br"],
             "public_phones": [],
             "public_whatsapps": ["+5548999999999"],
@@ -288,6 +295,8 @@ def test_autonomous_prospecting_discovers_domain_contact_and_pain(client, monkey
     assert lead["lead_score"] == 91
     assert lead["contact_email"] == "contato@empresa.com.br"
     assert lead["contact_whatsapp"] == "+5548999999999"
+    assert lead["whatsapp_url"].startswith("https://api.whatsapp.com/send/?phone=%2B")
+    assert any(item.get("type") == "official_whatsapp_link" for item in lead["evidence"])
 
     repeated = client.post("/api/v1/prospect/run", json={"limit": 10, "min_score": 0}).json()
     assert repeated == []
@@ -325,7 +334,7 @@ def test_autonomous_prospecting_can_skip_slow_public_complaint_search(client, mo
         raise AssertionError("complaint search should be skipped in quick workflow mode")
 
     async def fake_scan(domain, settings, max_pages=5):
-        assert max_pages == 1
+        assert max_pages == 2
         return {
             "crm": "HubSpot",
             "confidence": 0.9,
@@ -360,7 +369,7 @@ def test_autonomous_prospecting_returns_warm_qualified_crm_leads(client, monkeyp
         }]
 
     async def fake_scan(domain, settings, max_pages=5):
-        assert max_pages == 1
+        assert max_pages == 2
         return {
             "crm": "Pipedrive",
             "confidence": 0.55,

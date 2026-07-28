@@ -22,6 +22,10 @@ TECH_SIGNATURES = {
 CONTACT_TERMS = ("contato", "contact", "orcamento", "orçamento", "fale", "sobre", "about", "atendimento")
 EMAIL_RE = re.compile(r"[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}", re.I)
 PHONE_RE = re.compile(r"(?:\+?55\s*)?(?:\(?\d{2}\)?[\s.-]*)?(?:9\s*)?\d{4}[\s.-]*\d{4}")
+WHATSAPP_PHONE_RE = re.compile(
+    r"(?:wa\.me/|whatsapp\.com/(?:send/?)?\?[^\"'\s<>]*?phone=)(?:%2B|\+)?(\d{10,13})",
+    re.I,
+)
 IGNORED_EMAIL_PARTS = ("example.", "email@email", "teste@teste", "sentry", "wixpress", "cloudflare", "noreply", "no-reply")
 FREE_EMAIL_DOMAINS = {
     "gmail.com", "hotmail.com", "hotmail.com.br", "outlook.com", "live.com",
@@ -86,11 +90,22 @@ def _public_phones(soup: BeautifulSoup) -> tuple[list[str], list[str]]:
                 phones.add(phone)
         parsed = urlparse(href)
         hostname = (parsed.hostname or "").lower()
-        if hostname == "wa.me" or hostname.endswith("whatsapp.com"):
-            raw_phone = parsed.path.strip("/") if hostname == "wa.me" else parse_qs(parsed.query).get("phone", [""])[0]
+        if hostname == "wa.me" or hostname.endswith("whatsapp.com") or parsed.scheme == "whatsapp":
+            raw_phone = (
+                parsed.path.strip("/")
+                if hostname == "wa.me"
+                else parse_qs(parsed.query).get("phone", [""])[0]
+            )
             phone = _normalize_br_phone(raw_phone)
             if phone and phone.startswith("+"):
                 whatsapps.add(phone)
+    # Alguns widgets inserem o endereço em scripts ou atributos data-*,
+    # sem criar um <a> clicável no HTML inicial.
+    raw_html = soup.decode().replace("\\/", "/")
+    for raw_phone in WHATSAPP_PHONE_RE.findall(raw_html):
+        phone = _normalize_br_phone(raw_phone)
+        if phone and phone.startswith("+"):
+            whatsapps.add(phone)
     if not phones:
         for match in PHONE_RE.findall(soup.get_text(" ", strip=True)):
             phone = _normalize_br_phone(match)
@@ -119,6 +134,7 @@ async def scan_domain(domain: str, settings: Settings, max_pages: int = 5) -> di
     found_emails: set[str] = set()
     found_phones: set[str] = set()
     found_whatsapps: set[str] = set()
+    contact_evidence: list[dict] = []
     try:
         async with httpx.AsyncClient(timeout=settings.request_timeout_seconds, follow_redirects=True, headers=headers) as client:
             homepage = await client.get(f"https://{domain}")
@@ -143,26 +159,33 @@ async def scan_domain(domain: str, settings: Settings, max_pages: int = 5) -> di
             phones, whatsapps = _public_phones(soup)
             found_phones.update(phones)
             found_whatsapps.update(whatsapps)
+            contact_evidence.extend({
+                "source": str(response.url),
+                "technology": "WhatsApp",
+                "type": "official_whatsapp_link",
+                "public_whatsapp": phone,
+            } for phone in whatsapps)
             for technology, patterns in TECH_SIGNATURES.items():
                 matches = sorted({pattern for pattern in patterns if re.search(pattern, searchable, re.I)})
                 if matches:
                     scores[technology] = scores.get(technology, 0) + len(matches)
                     evidence.append({"source": str(response.url), "technology": technology, "signatures": matches})
         if not scores:
-            return {"crm": None, "confidence": 0.0, "evidence": [], "public_emails": sorted(found_emails), "public_phones": sorted(found_phones), "public_whatsapps": sorted(found_whatsapps), "pages_scanned": len(responses)}
+            return {"crm": None, "confidence": 0.0, "evidence": [], "contact_evidence": contact_evidence, "public_emails": sorted(found_emails), "public_phones": sorted(found_phones), "public_whatsapps": sorted(found_whatsapps), "pages_scanned": len(responses)}
         crm = max(scores, key=scores.get)
         confidence = min(0.95, 0.55 + 0.15 * (scores[crm] - 1))
         return {
             "crm": crm,
             "confidence": confidence,
             "evidence": [item for item in evidence if item["technology"] == crm],
+            "contact_evidence": contact_evidence,
             "public_emails": sorted(found_emails),
             "public_phones": sorted(found_phones),
             "public_whatsapps": sorted(found_whatsapps),
             "pages_scanned": len(responses),
         }
     except (httpx.HTTPError, ValueError):
-        return {"crm": None, "confidence": 0.0, "evidence": [], "public_emails": [], "public_phones": [], "public_whatsapps": [], "pages_scanned": 0}
+        return {"crm": None, "confidence": 0.0, "evidence": [], "contact_evidence": [], "public_emails": [], "public_phones": [], "public_whatsapps": [], "pages_scanned": 0}
 
 
 def calculate_lead_score(lead: Lead) -> tuple[int, str, list[str]]:

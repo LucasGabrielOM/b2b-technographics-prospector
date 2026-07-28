@@ -171,7 +171,9 @@ presente. Quando configurada, a busca de empresas passa a usar o Google Maps
 como fonte principal e as fontes abertas como contingência. Na busca de
 escolas, o Maps fornece perfil, telefone e site; o robô visita o site e só
 preenche `contact_whatsapp` quando encontra um link público explícito. O campo
-`contact_phone` continua separado.
+`contact_phone` continua separado. A API também devolve `whatsapp_url`, e o
+painel prepara um botão direto com a mensagem de abordagem para os números
+confirmados no site oficial.
 
 O crédito fixo mensal de US$ 200 foi substituído em 1º de março de 2025 por
 franquias mensais específicas para cada SKU. No modo de teste atual:
@@ -185,8 +187,11 @@ Os valores e limites podem mudar. Consulte sempre a
 [tabela oficial](https://developers.google.com/maps/billing-and-pricing/pricing),
 configure alertas de orçamento e limite as cotas no Google Cloud. A API nova
 retorna no máximo cinco avaliações por local, ordenadas por relevância, não
-necessariamente as mais recentes. O laboratório apenas exibe essa amostra e
-não a grava permanentemente no banco.
+necessariamente as mais recentes. Na prospecção de empresas, o backend analisa
+essa amostra por regras objetivas, registra apenas temas agregados, contagem,
+score e link da fonte e não copia o texto integral das avaliações para o banco.
+Sinais como demora, falta de retorno, dificuldade por telefone/WhatsApp,
+problemas no site e suporte sem solução entram na justificativa do lead.
 
 Para uma demonstração com baixo risco de cobrança, restrinja a chave apenas à
 **Places API (New)** e defina uma cota abaixo da franquia mensal. Alertas de
@@ -218,6 +223,12 @@ O detector visita a página inicial e até quatro páginas públicas relacionada
 - e-mail profissional público: 20 pontos;
 - empresa e setor identificados: 5 pontos cada;
 - dor pública e tipo de oportunidade: reforço adicional de score quando há reclamações, vagas ou sinais de suporte/CRM.
+
+Uma empresa sem CRM pode ser classificada como quente quando houver canal de
+contato público e pelo menos um sinal forte ou recorrente de dor nas avaliações.
+Uma única avaliação fraca não basta por padrão: o score diferencia sinal
+isolado de recorrência e mostra no card quantas avaliações da amostra sustentam
+a classificação.
 
 Temperaturas: `hot` a partir de 65, `warm` a partir de 40 e `cold` abaixo disso. O workflow **B2B 03 - Descobrir e priorizar leads quentes** reúne todo o teste inicial: recebe os domínios, executa a descoberta, calcula o score e mostra somente os leads quentes. Para testar no n8n, basta importar esse único workflow. O score prioriza revisão; ele não autoriza envio automático.
 

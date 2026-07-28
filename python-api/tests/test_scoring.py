@@ -2,6 +2,8 @@ from types import SimpleNamespace
 
 from bs4 import BeautifulSoup
 
+from app.config import Settings
+from app.prospecting import discover_from_google_places, score_google_review_signals
 from app.services import _public_emails, _public_phones, calculate_lead_score, is_business_email, refresh_lead_score
 
 
@@ -108,3 +110,74 @@ def test_toll_free_number_is_not_treated_as_whatsapp():
     phones, whatsapps = _public_phones(soup)
     assert phones == []
     assert whatsapps == []
+
+
+def test_whatsapp_widget_inside_script_is_detected():
+    soup = BeautifulSoup(
+        '<script>window.supportLink="https:\\/\\/api.whatsapp.com\\/send?phone=5548999997777";</script>',
+        "html.parser",
+    )
+
+    _, whatsapps = _public_phones(soup)
+
+    assert whatsapps == ["+5548999997777"]
+
+
+def test_google_reviews_generate_explainable_pain_signal():
+    analysis = score_google_review_signals({
+        "name": "Empresa Teste",
+        "business_status": "OPERATIONAL",
+        "rating": 3.2,
+        "review_count": 84,
+        "google_maps_url": "https://maps.google.com/?cid=123",
+        "reviews": [
+            {"rating": 1, "text": "Muita demora e ninguém atende o telefone."},
+            {"rating": 2, "text": "Sem retorno no WhatsApp e suporte não resolveu."},
+            {"rating": 5, "text": "Atendimento excelente e rápido."},
+        ],
+    })
+
+    assert analysis["pain_score"] >= 55
+    assert analysis["review_signal_count"] == 2
+    assert "demora no atendimento" in analysis["review_pain_themes"]
+    assert "2 de 3 avaliações" in analysis["pain_summary"]
+    assert analysis["pain_source"] == "https://maps.google.com/?cid=123"
+    assert any(item["type"] == "public_review_signal" for item in analysis["evidence"])
+
+
+def test_google_company_discovery_requests_reviews_and_keeps_their_score(monkeypatch):
+    import asyncio
+
+    calls = []
+
+    async def fake_google(query, settings, *, limit, include_contacts, include_reviews):
+        calls.append((include_contacts, include_reviews))
+        return {"places": [{
+            "place_id": "company-place",
+            "name": "Empresa Exemplo",
+            "business_status": "OPERATIONAL",
+            "primary_type": "store",
+            "phone": "(48) 3333-4444",
+            "website": "https://empresaexemplo.com.br",
+            "google_maps_url": "https://maps.google.com/?cid=456",
+            "rating": 3.1,
+            "review_count": 72,
+            "reviews": [
+                {"rating": 1, "text": "Demora e ninguém atende."},
+                {"rating": 2, "text": "Sem retorno no WhatsApp."},
+            ],
+        }]}
+
+    monkeypatch.setattr("app.prospecting.search_google_places", fake_google)
+    results = asyncio.run(discover_from_google_places(
+        "Florianopolis",
+        "Santa Catarina",
+        ["loja"],
+        5,
+        Settings(google_maps_api_key="test-key"),
+    ))
+
+    assert calls == [(True, True)]
+    assert results[0]["domain"] == "empresaexemplo.com.br"
+    assert results[0]["pain_score"] >= 55
+    assert results[0]["pain_source"] == "https://maps.google.com/?cid=456"
