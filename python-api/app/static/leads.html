@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#071525">
   <meta name="description" content="Central de leads LeadPilot">
   <title>Central de leads · LeadPilot</title>
-  <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="/static/style.css?v=30">
 </head>
 <body data-page="leads">
   <div id="mobileOverlay" class="mobile-overlay hidden"></div>
@@ -76,6 +76,10 @@
       </section>
 
       <div id="notice" class="notice hidden" role="status"></div>
+      <div id="lastSearchFilter" class="last-search-filter hidden">
+        <div><strong>Exibindo a última pesquisa</strong><span id="lastSearchCount"></span></div>
+        <button id="showAllLeads" type="button" class="button button-light">Ver toda a base</button>
+      </div>
 
       <section class="surface leads-workspace">
         <header class="leads-header">
@@ -177,6 +181,6 @@
     </form>
   </dialog>
 
-  <script src="/static/leads.js" defer></script>
+  <script src="/static/leads.js?v=30" defer></script>
 </body>
 </html>

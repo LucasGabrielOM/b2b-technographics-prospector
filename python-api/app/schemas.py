@@ -105,6 +105,40 @@ class GooglePlacesPreviewRequest(BaseModel):
         return " ".join(value.split())
 
 
+class GooglePlaceReviewImport(BaseModel):
+    rating: float | None = Field(default=None, ge=0, le=5)
+    text: str | None = Field(default=None, max_length=500)
+    published: str | None = Field(default=None, max_length=120)
+    publish_time: str | None = Field(default=None, max_length=80)
+    author: str | None = Field(default=None, max_length=160)
+    google_maps_url: str | None = Field(default=None, max_length=1000)
+
+
+class GooglePlaceImportItem(BaseModel):
+    place_id: str = Field(min_length=3, max_length=240)
+    name: str | None = Field(default=None, max_length=240)
+    address: str | None = Field(default=None, max_length=500)
+    business_status: str | None = Field(default=None, max_length=60)
+    primary_type: str | None = Field(default=None, max_length=120)
+    phone: str | None = Field(default=None, max_length=60)
+    website: str | None = Field(default=None, max_length=1000)
+    rating: float | None = Field(default=None, ge=0, le=5)
+    review_count: int | None = Field(default=None, ge=0)
+    google_maps_url: str | None = Field(default=None, max_length=1000)
+    reviews: list[GooglePlaceReviewImport] = Field(default_factory=list, max_length=5)
+
+
+class GooglePlacesImportRequest(BaseModel):
+    query: str = Field(min_length=3, max_length=200)
+    audience: str = Field(default="companies", pattern="^(schools|companies)$")
+    places: list[GooglePlaceImportItem] = Field(min_length=1, max_length=20)
+
+    @field_validator("query")
+    @classmethod
+    def normalize_import_query(cls, value: str) -> str:
+        return " ".join(value.split())
+
+
 class PortalUserCreate(BaseModel):
     username: str = Field(min_length=3, max_length=80, pattern=r"^[a-zA-Z0-9._-]+$")
     display_name: str = Field(min_length=2, max_length=160)
