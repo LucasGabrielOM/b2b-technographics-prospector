@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#071525">
   <meta name="description" content="Nova prospecção LeadPilot">
   <title>Iniciar prospecção · LeadPilot</title>
-  <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="/static/style.css?v=30">
 </head>
 <body data-page="prospecting">
   <div id="mobileOverlay" class="mobile-overlay hidden"></div>
@@ -179,7 +179,7 @@
 
           <article class="surface maps-card">
             <header class="maps-header">
-              <div><span class="eyebrow">GOOGLE MAPS LAB</span><h2>Teste da Places API</h2></div>
+              <div><span class="eyebrow">PESQUISA DIRETA</span><h2>Buscar no Google Maps</h2></div>
               <span id="mapsStatus" class="integration-pill checking">Verificando</span>
             </header>
             <div class="pricing-alert">
@@ -188,7 +188,7 @@
               <a href="https://developers.google.com/maps/billing-and-pricing/pricing" target="_blank" rel="noopener">Ver preços oficiais ↗</a>
             </div>
             <form id="mapsForm" class="maps-form">
-              <label>Consulta de teste
+              <label>O que deseja pesquisar?
                 <input id="mapsQuery" value="escolas particulares em Florianópolis SC" maxlength="200">
               </label>
               <div class="maps-options">
@@ -197,7 +197,7 @@
                 <label class="inline-check"><input id="mapsReviews" type="checkbox"><span>Avaliações</span></label>
               </div>
               <div id="mapsSku" class="sku-note">Text Search Pro · franquia de 5.000 eventos/mês</div>
-              <button id="testMaps" class="button button-light" type="submit">Testar Google Maps</button>
+              <button id="testMaps" class="button button-light" type="submit">Pesquisar no Google Maps</button>
             </form>
             <div id="mapsResults" class="maps-results"></div>
           </article>
@@ -205,6 +205,6 @@
       </section>
     </main>
   </div>
-  <script src="/static/prospecting.js" defer></script>
+  <script src="/static/prospecting.js?v=30" defer></script>
 </body>
 </html>

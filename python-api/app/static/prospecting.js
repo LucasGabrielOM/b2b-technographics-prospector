@@ -1,7 +1,7 @@
 const byId = (id) => document.getElementById(id);
 const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[char]));
 const initials = (value) => String(value || 'LP').split(/\s+/).filter(Boolean).slice(0,2).map((part) => part[0]).join('').toUpperCase();
-const state = { identity: null, mapsConfigured: false, running: false, startedAt: null, timer: null };
+const state = { identity: null, mapsConfigured: false, mapsPreview: [], running: false, startedAt: null, timer: null };
 
 async function api(path, options = {}) {
   const response = await fetch(path, {credentials:'same-origin',headers:{'Content-Type':'application/json'},...options});
@@ -102,6 +102,11 @@ function leadSummary(lead) {
   </div>`;
 }
 
+function leadsUrl(leads, source = 'last-search') {
+  const ids = [...new Set((leads || []).map((lead) => Number(lead.id)).filter(Number.isInteger))];
+  return ids.length ? `/leads?ids=${ids.join(',')}&source=${encodeURIComponent(source)}` : '/leads';
+}
+
 function renderRunResults(result) {
   const leads = result.leads || [];
   byId('runResults').classList.remove('hidden');
@@ -109,7 +114,7 @@ function renderRunResults(result) {
     <div class="result-total"><strong>${leads.length}</strong><span>novos leads adicionados</span></div>
     <div>${leads.slice(0,5).map(leadSummary).join('')}</div>
     ${leads.length > 5 ? `<p class="more-results">+ ${leads.length-5} resultados disponíveis na central</p>` : ''}
-    <a class="button button-primary" href="/leads">Abrir novos leads</a>`;
+    <a class="button button-primary" href="${leadsUrl(leads)}">Abrir somente estes ${leads.length} leads</a>`;
 }
 
 async function runProspecting(event) {
@@ -157,8 +162,13 @@ function updateMapsSku() {
 
 function renderMapsResults(data) {
   const places = data.places || [];
+  state.mapsPreview = places;
   byId('mapsResults').innerHTML = places.length ? `
     <div class="maps-result-head"><strong>${places.length} locais encontrados</strong><span>${escapeHtml(data.sku)}</span></div>
+    <div class="maps-save-panel">
+      <div><strong>Prévia pronta</strong><span>Revise os locais e adicione-os à base para abrir os detalhes e preparar o contato.</span></div>
+      <button id="saveMapsResults" type="button" class="button button-primary">Adicionar ${places.length} à base</button>
+    </div>
     ${places.map((place) => `
       <article class="place-result">
         <div><strong>${escapeHtml(place.name || 'Local sem nome')}</strong><small>${escapeHtml(place.address || 'Endereço não informado')}</small></div>
@@ -173,6 +183,33 @@ function renderMapsResults(data) {
       </article>`).join('')}` : '<div class="maps-empty">Nenhum local retornado para esta consulta.</div>';
 }
 
+async function importMapsResults(event) {
+  const button = event.target.closest('#saveMapsResults');
+  if (!button || !state.mapsPreview.length) return;
+  button.disabled = true;
+  button.textContent = 'Adicionando e verificando sites…';
+  try {
+    const result = await api('/api/v1/google-places/import',{method:'POST',body:JSON.stringify({
+      query: byId('mapsQuery').value,
+      audience: byId('audience').value,
+      places: state.mapsPreview,
+    })});
+    const leads = result.leads || [];
+    byId('mapsResults').insertAdjacentHTML('afterbegin',`
+      <div class="maps-import-success">
+        <strong>${escapeHtml(result.created_count)} novos leads adicionados</strong>
+        <span>${escapeHtml(result.existing_count)} já estavam na base e não foram duplicados.</span>
+        ${leads.length ? `<a class="button button-primary" href="${leadsUrl(leads,'google-maps')}">Abrir estes ${leads.length} leads</a>` : ''}
+      </div>`);
+    button.textContent = 'Resultados adicionados';
+    notify(result.message || 'Resultados do Google Maps processados.');
+  } catch (error) {
+    button.disabled = false;
+    button.textContent = `Adicionar ${state.mapsPreview.length} à base`;
+    notify(error.message,true);
+  }
+}
+
 async function testMaps(event) {
   event.preventDefault();
   if (!state.mapsConfigured) {
@@ -180,7 +217,8 @@ async function testMaps(event) {
     return;
   }
   byId('testMaps').disabled = true;
-  byId('testMaps').textContent = 'Consultando Google Maps…';
+  byId('testMaps').textContent = 'Pesquisando no Google Maps…';
+  state.mapsPreview = [];
   byId('mapsResults').innerHTML = '<div class="maps-empty">Buscando locais…</div>';
   try {
     const result = await api('/api/v1/google-places/preview',{method:'POST',body:JSON.stringify({
@@ -194,7 +232,7 @@ async function testMaps(event) {
     byId('mapsResults').innerHTML = `<div class="maps-empty error">${escapeHtml(error.message)}</div>`;
   } finally {
     byId('testMaps').disabled = false;
-    byId('testMaps').textContent = 'Testar Google Maps';
+    byId('testMaps').textContent = 'Pesquisar no Google Maps';
   }
 }
 
@@ -220,6 +258,7 @@ function toggleMobileMenu(open) {
 document.querySelectorAll('.audience-tab').forEach((tab) => tab.addEventListener('click',()=>selectAudience(tab.dataset.audience)));
 byId('prospectingForm').addEventListener('submit',runProspecting);
 byId('mapsForm').addEventListener('submit',testMaps);
+byId('mapsResults').addEventListener('click',importMapsResults);
 byId('mapsContacts').addEventListener('change',updateMapsSku);
 byId('mapsReviews').addEventListener('change',updateMapsSku);
 byId('menuToggle').addEventListener('click',()=>toggleMobileMenu(true));

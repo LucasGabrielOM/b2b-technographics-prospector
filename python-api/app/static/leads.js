@@ -1,5 +1,5 @@
 const byId = (id) => document.getElementById(id);
-const state = { leads: [], filtered: [], identity: null, page: 1, perPage: 15, quick: 'all', selectedId: null };
+const state = { leads: [], filtered: [], identity: null, page: 1, perPage: 15, quick: 'all', selectedId: null, resultIds: null, lastSearchOnly: false };
 const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[char]));
 const initials = (value) => String(value || 'LP').split(/\s+/).filter(Boolean).slice(0,2).map((part) => part[0]).join('').toUpperCase();
 const onlyDigits = (value) => String(value || '').replace(/\D/g,'');
@@ -91,6 +91,12 @@ function contactQuality(lead) {
 
 function qualificationSummary(lead) {
   if (lead.lead_type === 'school') {
+    if (String(lead.external_id || '').startsWith('google:')) {
+      if (lead.pain_summary) return 'Instituição de ensino com sinal público de oportunidade';
+      if (lead.contact_whatsapp) return 'Instituição de ensino com WhatsApp confirmado';
+      if (lead.contact_phone) return 'Instituição de ensino com telefone no Google Maps';
+      return 'Instituição de ensino localizada no Google Maps';
+    }
     if (lead.contact_email && lead.contact_name) return 'Escola privada, responsável e e-mail público';
     if (lead.contact_email) return 'Escola privada com e-mail público';
     if (lead.contact_phone) return 'Escola privada com telefone oficial';
@@ -103,14 +109,17 @@ function qualificationSummary(lead) {
 }
 
 function renderSummary() {
-  const total = state.leads.length;
-  const hot = state.leads.filter((lead) => lead.temperature === 'hot').length;
-  const contacts = state.leads.filter(hasContact).length;
+  const visibleBase = state.lastSearchOnly && state.resultIds
+    ? state.leads.filter((lead) => state.resultIds.has(Number(lead.id)))
+    : state.leads;
+  const total = visibleBase.length;
+  const hot = visibleBase.filter((lead) => lead.temperature === 'hot').length;
+  const contacts = visibleBase.filter(hasContact).length;
   const coverage = Math.round((contacts/(total||1))*100);
   byId('leadSummaryCards').innerHTML = [
     ['Total',total,'leads únicos'],['Prioridade',hot,'quentes'],['Cobertura',`${coverage}%`,'com contato'],
   ].map(([label,value,caption]) => `<article class="mini-stat"><span>${label}</span><strong>${value}</strong><small>${caption}</small></article>`).join('');
-  byId('navLeadCount').textContent = total;
+  byId('navLeadCount').textContent = state.leads.length;
   byId('sidebarCoverage').textContent = `${coverage}% com contato`;
 }
 
@@ -126,7 +135,8 @@ function applyFilters(resetPage = true) {
       || (state.quick === 'contact' && hasContact(lead))
       || (state.quick === 'email' && Boolean(lead.contact_email))
       || (state.quick === 'pending' && lead.status !== 'sent');
-    return (!query || searchable.includes(query)) && (!type || lead.lead_type === type) && (!temperature || lead.temperature === temperature) && (!status || lead.status === status) && quickMatch;
+    const resultMatch = !state.lastSearchOnly || !state.resultIds || state.resultIds.has(Number(lead.id));
+    return resultMatch && (!query || searchable.includes(query)) && (!type || lead.lead_type === type) && (!temperature || lead.temperature === temperature) && (!status || lead.status === status) && quickMatch;
   }).sort((a,b) => {
     const qualityA = (a.contact_whatsapp?4:0)+(a.contact_email?3:0)+(a.contact_name?2:0)+(a.contact_phone?1:0);
     const qualityB = (b.contact_whatsapp?4:0)+(b.contact_email?3:0)+(b.contact_name?2:0)+(b.contact_phone?1:0);
@@ -189,7 +199,7 @@ function openDrawer(id) {
       <div class="drawer-pill"><span>Status</span><strong>${escapeHtml(statusLabels[lead.status] || 'Novo')}</strong></div>
     </div>
     <section class="detail-section"><h3>Oportunidade</h3><div class="detail-grid">
-      <div class="detail-item"><span>Tipo</span><strong>${lead.lead_type==='school'?'Escola particular':'Empresa'}</strong></div>
+      <div class="detail-item"><span>Tipo</span><strong>${lead.lead_type==='school'?(String(lead.external_id || '').startsWith('google:')?'Instituição de ensino no Google Maps':'Escola particular confirmada no INEP'):'Empresa'}</strong></div>
       <div class="detail-item"><span>Localização</span><strong>${escapeHtml(lead.location || 'Não informada')}</strong></div>
       <div class="detail-item"><span>Oportunidade</span><strong>${escapeHtml(lead.opportunity_type || 'Prospecção consultiva')}</strong></div>
       <div class="detail-item"><span>CRM</span><strong>${escapeHtml(lead.crm || 'Não detectado')}</strong></div>
@@ -297,6 +307,15 @@ async function loadLeads(openFromUrl = true) {
   finally { byId('refresh').disabled = false; }
 }
 
+function showAllLeads() {
+  state.lastSearchOnly = false;
+  state.resultIds = null;
+  byId('lastSearchFilter').classList.add('hidden');
+  history.replaceState({},'',location.pathname);
+  renderSummary();
+  applyFilters();
+}
+
 function resetFilters() {
   byId('filters').reset(); state.quick='all';
   document.querySelectorAll('.quick').forEach((button)=>button.classList.toggle('active',button.dataset.quick==='all'));
@@ -331,6 +350,7 @@ byId('temperature').addEventListener('change',()=>applyFilters());
 byId('status').addEventListener('change',()=>applyFilters());
 byId('clearFilters').addEventListener('click',resetFilters);
 byId('emptyClear').addEventListener('click',resetFilters);
+byId('showAllLeads').addEventListener('click',showAllLeads);
 document.querySelectorAll('.quick').forEach((button)=>button.addEventListener('click',()=>{state.quick=button.dataset.quick;document.querySelectorAll('.quick').forEach((item)=>item.classList.toggle('active',item===button));applyFilters();}));
 byId('prevPage').addEventListener('click',()=>{if(state.page>1){state.page-=1;renderTable();}});
 byId('nextPage').addEventListener('click',()=>{if(state.page*state.perPage<state.filtered.length){state.page+=1;renderTable();}});
@@ -366,6 +386,13 @@ byId('logoutBtn').addEventListener('click',async()=>{try{await api('/api/v1/auth
   try {
     applyIdentity(await api('/api/v1/auth/me'));
     const params = new URLSearchParams(location.search);
+    const resultIds = (params.get('ids') || '').split(',').map(Number).filter(Number.isInteger);
+    if (resultIds.length) {
+      state.resultIds = new Set(resultIds);
+      state.lastSearchOnly = true;
+      byId('lastSearchCount').textContent = `${resultIds.length} leads encontrados nesta execução`;
+      byId('lastSearchFilter').classList.remove('hidden');
+    }
     const quick = params.get('quick');
     if (['hot','contact','email','pending'].includes(quick)) {
       state.quick=quick;

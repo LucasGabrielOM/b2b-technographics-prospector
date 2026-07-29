@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -15,8 +16,8 @@ from .config import Settings, get_settings
 from .database import Base, engine, ensure_lead_contact_columns, get_db
 from .google_places import GooglePlacesError, search_google_places
 from .models import Lead, LeadStatus, PortalUser
-from .prospecting import discover_businesses, map_complaints, score_google_review_signals
-from .schemas import DiscoveryRequest, GenerateRequest, GooglePlacesPreviewRequest, LeadOut, LeadPatch, MarkContactedRequest, PortalPasswordReset, PortalUserCreate, PortalUserOut, PortalUserPatch, ProspectingRunRequest, ProspectRequest, SchoolProspectRequest, SuppressRequest
+from .prospecting import discover_businesses, map_complaints, normalize_domain, score_google_review_signals
+from .schemas import DiscoveryRequest, GenerateRequest, GooglePlacesImportRequest, GooglePlacesPreviewRequest, LeadOut, LeadPatch, MarkContactedRequest, PortalPasswordReset, PortalUserCreate, PortalUserOut, PortalUserPatch, ProspectingRunRequest, ProspectRequest, SchoolProspectRequest, SuppressRequest
 from .school_prospecting import INEP_SOURCE_URL, enrich_school_batch, enrich_school_public_contacts, school_evidence, select_schools
 from .services import dispatch, enrich_with_hunter, generate_draft, is_business_email, refresh_lead_score, scan_domain
 
@@ -331,6 +332,135 @@ async def google_places_preview(
         return result
     except GooglePlacesError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@app.post("/api/v1/google-places/import")
+async def import_google_places(
+    request: Request,
+    payload: GooglePlacesImportRequest,
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+):
+    """Salva uma prévia do Maps como leads rastreáveis, sem duplicar a base."""
+    require_portal_admin(request, settings)
+    unique_places = {}
+    for item in payload.places:
+        unique_places.setdefault(item.place_id, item.model_dump(mode="json"))
+
+    prepared: list[tuple[dict, str | None, dict]] = []
+    semaphore = asyncio.Semaphore(max(1, min(5, settings.discovery_concurrency)))
+
+    async def prepare(place: dict) -> tuple[dict, str | None, dict]:
+        domain = normalize_domain(place.get("website"))
+        scan_result = {
+            "crm": None,
+            "confidence": 0.0,
+            "evidence": [],
+            "contact_evidence": [],
+            "public_emails": [],
+            "public_phones": [],
+            "public_whatsapps": [],
+            "pages_scanned": 0,
+        }
+        if domain:
+            async with semaphore:
+                try:
+                    scan_result = await asyncio.wait_for(
+                        scan_domain(domain, settings, max_pages=2),
+                        timeout=12,
+                    )
+                except Exception:
+                    pass
+        return place, domain, scan_result
+
+    prepared = list(await asyncio.gather(*(prepare(place) for place in unique_places.values())))
+    created: list[Lead] = []
+    found: list[Lead] = []
+    skipped_closed = 0
+
+    for place, real_domain, scan_result in prepared:
+        if place.get("business_status") not in {None, "OPERATIONAL"}:
+            skipped_closed += 1
+            continue
+        external_id = f"google:{place['place_id']}"
+        lead = db.scalar(select(Lead).where(Lead.external_id == external_id))
+        if lead is None and real_domain:
+            lead = db.scalar(select(Lead).where(Lead.domain == real_domain))
+        is_new = lead is None
+        if lead is None:
+            synthetic = hashlib.sha256(place["place_id"].encode("utf-8")).hexdigest()[:24]
+            lead = Lead(domain=real_domain or f"google-{synthetic}.place")
+            db.add(lead)
+
+        lead.external_id = lead.external_id or external_id
+        lead.lead_type = "school" if payload.audience == "schools" else "company"
+        lead.company_name = place.get("name") or lead.company_name or lead.domain
+        lead.location = place.get("address") or lead.location
+        lead.sector = place.get("primary_type") or lead.sector
+        lead.discovery_source = place.get("google_maps_url") or place.get("website") or lead.discovery_source
+        lead.website_url = place.get("website") or lead.website_url
+        lead.crm = scan_result.get("crm")
+        lead.confidence = float(scan_result.get("confidence") or 0)
+
+        review_signals = score_google_review_signals(place)
+        lead.pain_score = int(review_signals.get("pain_score") or 0)
+        lead.pain_summary = review_signals.get("pain_summary")
+        lead.pain_source = review_signals.get("pain_source")
+        lead.opportunity_type = review_signals.get("opportunity_type") or "prospecao consultiva"
+        combined_evidence = [
+            *(review_signals.get("evidence") or []),
+            *(scan_result.get("evidence") or []),
+            *(scan_result.get("contact_evidence") or []),
+        ]
+        seen_evidence: set[tuple] = set()
+        lead.evidence = []
+        for evidence_item in combined_evidence:
+            key = (
+                evidence_item.get("source"),
+                evidence_item.get("type"),
+                evidence_item.get("technology"),
+                evidence_item.get("public_whatsapp"),
+            )
+            if key not in seen_evidence:
+                seen_evidence.add(key)
+                lead.evidence.append(evidence_item)
+
+        if not is_business_email(lead.contact_email):
+            lead.contact_email = next(iter(scan_result.get("public_emails") or []), None)
+        lead.contact_phone = (
+            next(iter(scan_result.get("public_phones") or []), None)
+            or place.get("phone")
+            or lead.contact_phone
+        )
+        lead.contact_whatsapp = (
+            next(iter(scan_result.get("public_whatsapps") or []), None)
+            or lead.contact_whatsapp
+        )
+        lead.notes = (
+            f"Importado da pesquisa direta no Google Maps: {payload.query}. "
+            f"Status público: {place.get('business_status') or 'não informado'}. "
+            "O telefone vem do perfil público; WhatsApp só é preenchido quando há link explícito no site oficial."
+        )
+        refresh_lead_score(lead)
+        found.append(lead)
+        if is_new:
+            created.append(lead)
+
+    db.commit()
+    found.sort(key=lambda lead: (lead.lead_score, bool(lead.contact_whatsapp or lead.contact_email or lead.contact_phone)), reverse=True)
+    created_ids = {lead.id for lead in created}
+    return {
+        "status": "completed",
+        "created_count": len(created),
+        "existing_count": len(found) - len(created),
+        "skipped_closed": skipped_closed,
+        "lead_ids": [lead.id for lead in found],
+        "created_lead_ids": [lead.id for lead in found if lead.id in created_ids],
+        "leads": [LeadOut.model_validate(lead).model_dump(mode="json") for lead in found],
+        "message": (
+            f"{len(created)} novos leads adicionados e {len(found) - len(created)} já existentes identificados."
+        ),
+    }
 
 
 @app.post("/api/v1/leads/discover", response_model=list[LeadOut])

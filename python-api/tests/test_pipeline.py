@@ -110,6 +110,79 @@ def test_portal_starts_school_prospecting_and_previews_google_maps(client, monke
     assert preview.json()["free_monthly_events"] == 1000
 
 
+def test_portal_imports_google_maps_preview_and_deduplicates_it(client, monkeypatch):
+    assert client.post("/api/v1/auth/login", json={
+        "username": "admin",
+        "password": "demo1234",
+    }).status_code == 200
+
+    async def fake_scan(domain, settings, max_pages=5):
+        assert domain == "empresa-maps.com.br"
+        assert max_pages == 2
+        return {
+            "crm": "HubSpot",
+            "confidence": 0.85,
+            "evidence": [{"source": "https://empresa-maps.com.br", "technology": "HubSpot"}],
+            "contact_evidence": [{
+                "source": "https://empresa-maps.com.br/contato",
+                "technology": "WhatsApp",
+                "type": "official_whatsapp_link",
+                "public_whatsapp": "+5548999991111",
+            }],
+            "public_emails": ["contato@empresa-maps.com.br"],
+            "public_phones": ["+554833331111"],
+            "public_whatsapps": ["+5548999991111"],
+            "pages_scanned": 2,
+        }
+
+    monkeypatch.setattr("app.main.scan_domain", fake_scan)
+    payload = {
+        "query": "empresas em Florianópolis SC",
+        "audience": "companies",
+        "places": [{
+            "place_id": "maps-place-123",
+            "name": "Empresa Maps",
+            "address": "Florianópolis, SC",
+            "business_status": "OPERATIONAL",
+            "primary_type": "store",
+            "phone": "(48) 3333-1111",
+            "website": "https://empresa-maps.com.br/contato",
+            "rating": 3.4,
+            "review_count": 80,
+            "google_maps_url": "https://maps.google.com/?cid=123",
+            "reviews": [{
+                "rating": 1,
+                "text": "Demora no atendimento e ninguém responde o telefone.",
+                "published": "há um mês",
+            }],
+        }],
+    }
+
+    imported = client.post("/api/v1/google-places/import", json=payload)
+    assert imported.status_code == 200
+    result = imported.json()
+    assert result["created_count"] == 1
+    assert result["existing_count"] == 0
+    assert result["lead_ids"] == result["created_lead_ids"]
+    lead = result["leads"][0]
+    assert lead["external_id"] == "google:maps-place-123"
+    assert lead["domain"] == "empresa-maps.com.br"
+    assert lead["contact_phone"] == "+554833331111"
+    assert lead["contact_whatsapp"] == "+5548999991111"
+    assert lead["pain_score"] >= 50
+    assert lead["temperature"] == "hot"
+    assert any(item.get("type") == "public_review_signal" for item in lead["evidence"])
+    assert any(item.get("type") == "official_whatsapp_link" for item in lead["evidence"])
+
+    repeated = client.post("/api/v1/google-places/import", json=payload)
+    assert repeated.status_code == 200
+    repeated_result = repeated.json()
+    assert repeated_result["created_count"] == 0
+    assert repeated_result["existing_count"] == 1
+    assert repeated_result["lead_ids"] == result["lead_ids"]
+    assert len(client.get("/api/v1/leads").json()) == 1
+
+
 def test_portal_uses_clear_boolean_options_for_school_enrichment(client, monkeypatch):
     captured = {}
 

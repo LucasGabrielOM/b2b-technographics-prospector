@@ -155,8 +155,11 @@ n8n ou no Swagger. A página permite:
 - enriquecer escolas com telefone e site do Google Maps e confirmar WhatsApp
   somente quando existir link público no site oficial;
 - manter `only_new=true`, evitando leads repetidos;
-- acompanhar a execução e abrir os resultados na central de leads;
-- testar a Places API (New) do Google Maps sem expor a chave no navegador.
+- acompanhar a execução e abrir na central somente os IDs encontrados naquela
+  pesquisa, com uma ação separada para voltar à base completa;
+- pesquisar diretamente na Places API (New) sem expor a chave no navegador,
+  revisar a prévia e adicionar os locais ao banco com deduplicação por
+  `place_id` e domínio.
 
 Para habilitar a busca automática e o laboratório do Google Maps, ative a **Places API (New)** no
 Google Cloud, crie uma chave restrita à API e configure no servidor:
@@ -174,6 +177,12 @@ preenche `contact_whatsapp` quando encontra um link público explícito. O campo
 `contact_phone` continua separado. A API também devolve `whatsapp_url`, e o
 painel prepara um botão direto com a mensagem de abordagem para os números
 confirmados no site oficial.
+
+A pesquisa direta do Maps não salva silenciosamente: primeiro apresenta a
+prévia e depois exibe **Adicionar à base**. Ao confirmar, o backend verifica o
+site oficial, importa telefone, CRM, WhatsApp explícito e sinais agregados das
+avaliações. Locais encerrados são ignorados e resultados já existentes são
+identificados sem criar uma segunda linha.
 
 O crédito fixo mensal de US$ 200 foi substituído em 1º de março de 2025 por
 franquias mensais específicas para cada SKU. No modo de teste atual:

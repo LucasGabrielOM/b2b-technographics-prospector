@@ -221,12 +221,21 @@ def calculate_lead_score(lead: Lead) -> tuple[int, str, list[str]]:
 
 def refresh_lead_score(lead: Lead) -> None:
     if getattr(lead, "lead_type", "company") == "school":
-        score = 35
-        reasons = [
-            "+35: escola privada ativa confirmada no Censo Escolar INEP 2025",
-            f"Fonte oficial: {getattr(lead, 'discovery_source', None) or 'Censo Escolar INEP 2025'}",
-        ]
         evidence = getattr(lead, "evidence", None) or []
+        official_school = next((item for item in evidence if item.get("type") == "official_school_registry"), None)
+        if official_school:
+            score = 35
+            reasons = [
+                "+35: escola privada ativa confirmada no Censo Escolar INEP 2025",
+                f"Fonte oficial: {getattr(lead, 'discovery_source', None) or 'Censo Escolar INEP 2025'}",
+            ]
+        else:
+            score = 20
+            reasons = [
+                "+20: estabelecimento educacional localizado em perfil público do Google Maps",
+                f"Fonte pública: {getattr(lead, 'discovery_source', None) or 'Google Maps'}",
+                "Cadastro educacional ainda não cruzado com o INEP.",
+            ]
         registry = next((item for item in evidence if item.get("type") == "public_company_registry"), None)
         if getattr(lead, "contact_whatsapp", None):
             score += 20
@@ -246,7 +255,6 @@ def refresh_lead_score(lead: Lead) -> None:
         if getattr(lead, "registration_number", None):
             score += 5
             reasons.append("+5: CNPJ da escola/mantenedora disponível")
-        official_school = next((item for item in evidence if item.get("type") == "official_school_registry"), None)
         if official_school and (official_school.get("has_social_media") or official_school.get("has_admin_internet")):
             score += 5
             reasons.append("+5: presença digital ou internet administrativa informada no Censo")
@@ -254,6 +262,14 @@ def refresh_lead_score(lead: Lead) -> None:
         if "Etapas:" in notes:
             score += 5
             reasons.append("+5: etapas de ensino identificadas")
+        pain_score = int(getattr(lead, "pain_score", 0) or 0)
+        if pain_score:
+            score = max(score, pain_score)
+            reasons.append(f"+sinal: avaliações públicas geraram score de dor {pain_score}")
+        if getattr(lead, "pain_summary", None):
+            reasons.append(f"Motivo: {lead.pain_summary}")
+        if getattr(lead, "pain_source", None):
+            reasons.append(f"Fonte pública: {lead.pain_source}")
         lead.lead_score = min(100, score)
         has_contact = bool(lead.contact_phone or lead.contact_whatsapp or lead.contact_email)
         lead.temperature = "hot" if lead.lead_score >= 70 and has_contact else "warm" if lead.lead_score >= 50 else "cold"
