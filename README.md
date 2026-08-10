@@ -1,5 +1,15 @@
 # B2B Technographics Prospector
 
+## Demo ao vivo
+
+Acesse o sistema publicado em produção:
+
+- URL: https://b2b-technographics-prospector.onrender.com/login
+- Usuário: `comercial.demo`
+- Senha: `LeadPilot#84Nq2x7P`
+
+Obs: o serviço fica hospedado no plano gratuito do Render e pode levar ~30s para "acordar" no primeiro acesso. É uma conta de demonstração sem dados reais de clientes.
+
 ## Painel de leads
 
 Abra `/dashboard` na URL da API para visualizar todos os leads persistidos pelo n8n. O painel permite filtrar por temperatura e status, pesquisar, editar os contatos, abrir o site da empresa, preparar WhatsApp/e-mail e marcar ou reabrir leads enviados. Painel, API e n8n usam a mesma tabela PostgreSQL; as alterações são sincronizadas imediatamente.
