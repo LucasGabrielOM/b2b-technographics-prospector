@@ -11,9 +11,11 @@ from sqlalchemy import or_
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from contextlib import asynccontextmanager
+
 from .auth import SESSION_COOKIE, authenticate, create_session_token, hash_password, portal_settings, require_portal_admin, require_portal_user
 from .config import Settings, get_settings
-from .database import Base, engine, ensure_lead_contact_columns, get_db
+from .database import Base, engine, get_db, get_db_status, init_db
 from .google_places import GooglePlacesError, search_google_places
 from .models import Lead, LeadStatus, PortalUser
 from .prospecting import discover_businesses, map_complaints, normalize_domain, score_google_review_signals
@@ -21,14 +23,20 @@ from .schemas import DiscoveryRequest, GenerateRequest, GooglePlacesImportReques
 from .school_prospecting import INEP_SOURCE_URL, enrich_school_batch, enrich_school_public_contacts, school_evidence, select_schools
 from .services import dispatch, enrich_with_hunter, generate_draft, is_business_email, refresh_lead_score, scan_domain
 
-Base.metadata.create_all(bind=engine)
-ensure_lead_contact_columns()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    init_db()
+    yield
+
+
 app = FastAPI(
     title="B2B Technographics Prospector",
     version="0.1.0",
     docs_url=None,
     redoc_url=None,
     openapi_url=None,
+    lifespan=lifespan,
 )
 STATIC_DIR = Path(__file__).parent / "static"
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
@@ -43,7 +51,15 @@ def find_lead(lead_id: int, db: Session) -> Lead:
 
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    db_type, is_fallback = get_db_status()
+    return {
+        "status": "ok",
+        "database": "sqlite_fallback" if is_fallback else "connected",
+        "db_engine": db_type,
+        "message": "B2B Technographics Prospector is online"
+        if not is_fallback
+        else "Running on local SQLite database fallback (Postgres connection unavailable)",
+    }
 
 
 @app.get("/openapi.json", include_in_schema=False)
